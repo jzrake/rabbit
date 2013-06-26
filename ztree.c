@@ -37,7 +37,7 @@ void ztree_prune(struct ztree *T)
  */
 {
   unsigned int n;
-  if (T->children == NULL) return;
+  if (IS_LEAF) return;
   for (n=0; n < 1<<T->rank; ++n) {
     ztree_del(T->children[n]);
   }

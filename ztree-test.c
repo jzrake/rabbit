@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include "ztree.h"
+#include "zmesh.h"
 
 #define nohup 1
 #define asserteq(E, v)printf("%s == %s : %d\n",#E,#v,E); assert(E==v||nohup);
 
-int main()
+int test_tree()
 {
   struct ztree *tree = ztree_new(3, sizeof(double));
 
@@ -39,14 +40,34 @@ int main()
   ztree_split(tree);
   struct ztree *it = NULL;
   int node_count = 0;
-  do {
+  while ((it = ztree_next(tree, it))) {
     ++node_count;
-    it = ztree_next(tree, it);
-  } while (it);
+  }
 
   asserteq(ztree_descendant_node_count(tree), node_count);
-
   ztree_del(tree);
 
+  return 0;
+}
+
+int test_mesh()
+{
+  struct ztree *tree = ztree_new(1, sizeof(double));
+  struct zmesh *mesh = zmesh_new(tree);
+  ztree_split(tree);
+  ztree_split(tree);
+  ztree_split(tree);
+  ztree_split(tree);
+  zmesh_build_faces(mesh);
+  zmesh_del(mesh);
+  ztree_del(tree);
+
+  return 0;
+}
+
+int main()
+{
+  test_tree();
+  test_mesh();
   return 0;
 }
