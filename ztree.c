@@ -11,7 +11,7 @@ struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
  * Create a new tree node with given rank
  */
 {
-  struct ztree *T = (struct ztree *) malloc(sizeof(struct ztree));
+  struct ztree *T = (struct ztree*) malloc(sizeof(struct ztree));
   T->id = 0;
   T->bytes = bytes;
   T->data = malloc(bytes);
@@ -64,6 +64,14 @@ void ztree_split(struct ztree *T)
       ztree_split(T->children[n]);
     }
   }
+}
+
+void ztree_splitn(struct ztree *T, int n)
+/*
+ * Split the tree n times (convenience function)
+ */
+{
+  while (n--) ztree_split(T);
 }
 
 void *ztree_get_data_buffer(const struct ztree *T)
@@ -128,6 +136,11 @@ int ztree_rank(const struct ztree *T)
   return T->rank;
 }
 
+int ztree_isleaf(const struct ztree *T)
+{
+  return IS_LEAF;
+}
+
 struct ztree *ztree_parent(const struct ztree *T)
 {
   return T->parent;
@@ -171,6 +184,15 @@ struct ztree *ztree_next(const struct ztree *T, const struct ztree *P)
   }
 }
 
+struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
+{
+  while (1) {
+    P = ztree_next(T, P);
+    if (P == NULL) return (struct ztree*) P;
+    if (ztree_isleaf(P)) return (struct ztree*) P;
+  }
+}
+
 struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
 /*
  * Travel 'depth' levels farther from the root, and across I0 nodes at the
@@ -178,7 +200,8 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
  * then the target node is not a descendant of this node. In that case, climb to
  * the closest common ancestor and descend the tree to the target node. Depth
  * and breadth traversals are taken relative to the present node, not the root
- * node.
+ * node. If the target node is off the tree then return NULL. If the target node
+ * is on the tree but not occupied then its nearest ancestor is returned.
  */
 {
   struct ztree *p = (struct ztree *) T;
@@ -239,4 +262,22 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
     }
   }
   return p;
+}
+
+struct ztree *ztree_travel1(const struct ztree *T, int d, int i)
+{
+  int I[1] = { i };
+  return ztree_travel(T, d, I);
+}
+
+struct ztree *ztree_travel2(const struct ztree *T, int d, int i, int j)
+{
+  int I[2] = { i, j };
+  return ztree_travel(T, d, I);
+}
+
+struct ztree *ztree_travel3(const struct ztree *T, int d, int i, int j, int k)
+{
+  int I[3] = { i, j, k };
+  return ztree_travel(T, d, I);
 }
