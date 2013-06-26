@@ -100,6 +100,7 @@ void output_tree(const struct ztree *T, const char *fname)
     double x = (ztree_index(it, 0) + 0.5) / (1 << ztree_depth(it));
     fprintf(outf, "%f %d\n", x, ztree_depth(it));
   }
+  fclose(outf);
 }
 
 void output_faces(const struct zmesh *M, const char *fname)
@@ -113,6 +114,7 @@ void output_faces(const struct zmesh *M, const char *fname)
     double z = 0.5 * (ztree_depth(F.cellL) + ztree_depth(F.cellR));
     fprintf(outf, "%f %f\n", 0.5 * (xL + xR), z);
   }
+  fclose(outf);
 }
 
 int main()
