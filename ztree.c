@@ -226,8 +226,9 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
    * right if id=1, until we reach the desired depth.
    */
   while (depth--) {
-    if (IS_LEAF) {
-      return p; /* silently return the closest ancestor */
+    if (p->children == NULL) {
+      /* return the closest ancestor of the target node if it does not exist */
+      return p;
     }
     else {
       pid = 0;
