@@ -3,10 +3,11 @@
 
 struct ztree;
 
-struct ztree *ztree_new(unsigned int rank);
+struct ztree *ztree_new(unsigned int rank, unsigned int bytes);
 void ztree_del(struct ztree *T);
 void ztree_prune(struct ztree *T);
 void ztree_split(struct ztree *T);
+void *ztree_get_data_buffer(const struct ztree *T);
 int ztree_index(const struct ztree *T, int axis);
 int ztree_id(const struct ztree *T);
 int ztree_descendant_node_count(const struct ztree *T);

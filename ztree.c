@@ -6,16 +6,16 @@
 #define IS_LEAF (T->children == NULL)
 #define MAX_RANK 32
 
-struct ztree *ztree_new(unsigned int rank)
+struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
 /*
  * Create a new tree node with given rank
  */
 {
   struct ztree *T = (struct ztree *) malloc(sizeof(struct ztree));
   T->id = 0;
-  T->bytes = 0;
+  T->bytes = bytes;
+  T->data = malloc(bytes);
   T->rank = rank;
-  T->data = NULL;
   T->parent = NULL;
   T->children = NULL;
   return T;
@@ -54,7 +54,7 @@ void ztree_split(struct ztree *T)
   if (IS_LEAF) {
     T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
     for (n=0; n < 1<<T->rank; ++n) {
-      T->children[n] = ztree_new(T->rank);
+      T->children[n] = ztree_new(T->rank, T->bytes);
       T->children[n]->parent = T;
       T->children[n]->id = n;
     }
@@ -64,6 +64,11 @@ void ztree_split(struct ztree *T)
       ztree_split(T->children[n]);
     }
   }
+}
+
+void *ztree_get_data_buffer(const struct ztree *T)
+{
+  return T->data;
 }
 
 int ztree_index(const struct ztree *T, int axis)
@@ -113,14 +118,14 @@ int ztree_descendant_leaf_count(const struct ztree *T)
   return n;
 }
 
-int ztree_rank(const struct ztree *T)
-{
-  return T->rank;
-}
-
 int ztree_depth(const struct ztree *T)
 {
   return IS_ROOT ? 0 : ztree_depth(T->parent) + 1;
+}
+
+int ztree_rank(const struct ztree *T)
+{
+  return T->rank;
 }
 
 struct ztree *ztree_parent(const struct ztree *T)

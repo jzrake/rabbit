@@ -7,7 +7,7 @@
 
 int main()
 {
-  struct ztree *tree = ztree_new(3);
+  struct ztree *tree = ztree_new(3, sizeof(double));
 
   asserteq(ztree_rank(tree), 3);
   asserteq(ztree_descendant_node_count(tree), 0);
