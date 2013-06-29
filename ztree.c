@@ -12,6 +12,7 @@ struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
  */
 {
   struct ztree *T = (struct ztree*) malloc(sizeof(struct ztree));
+  T->type = ZTREE_ROOT;
   T->id = 0;
   T->bytes = bytes;
   T->data = malloc(bytes);
@@ -207,6 +208,21 @@ struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
     if (P == NULL) return (struct ztree*) P;
     if (ztree_isleaf(P)) return (struct ztree*) P;
   }
+}
+
+struct ztree *ztree_add_leaf(struct ztree *T, int depth, const int *I)
+{
+  struct ztree *leaf;
+  while (1) {
+    leaf = ztree_travel(T, depth, I);
+    if (ztree_depth(leaf) - ztree_depth(T) == depth) {
+      break;
+    }
+    else {
+      ztree_split(leaf);
+    }
+  }
+  return leaf;
 }
 
 struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)

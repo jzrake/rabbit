@@ -9,6 +9,27 @@
 static void output_tree(const struct ztree *T, const char *fname);
 static void output_faces(const struct zmesh *M, const char *fname);
 
+int test_leaf()
+{
+  struct ztree *tree = ztree_new(1, 0);
+  struct ztree *it0, *it1;
+
+  int I0 = (1<<10) / 2 - 1;
+  int I1 = (1<<10) / 2;
+  it0 = ztree_add_leaf(tree, 10, &I0);
+  it1 = ztree_add_leaf(tree, 10, &I1);
+
+  asserteq(ztree_index(it0, 0), I0);
+  asserteq(ztree_index(it1, 0), I1);
+  asserteq(ztree_depth(it0), 10);
+  asserteq(ztree_depth(it1), 10);
+
+  output_tree(tree, "tree.dat");
+
+  ztree_del(tree);
+  return 0;
+}
+
 int test_tree()
 {
   struct ztree *tree = ztree_new(3, sizeof(double));
@@ -94,8 +115,9 @@ int test_mesh()
 
 int main(int argc, char **argv)
 {
-  test_tree();
-  test_mesh();
+  test_leaf();
+  //  test_tree();
+  //  test_mesh();
   return 0;
 }
 
