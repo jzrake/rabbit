@@ -1,6 +1,6 @@
 
 EXE = ztree-test
-CFLAGS = -Wall
+CFLAGS = -Wall -g -O0
 CC = cc
 
 default : $(EXE)

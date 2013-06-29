@@ -4,11 +4,11 @@
 #define ZTREE_MAX_RANK 32
 
 enum ztree_node_type {
+  ZTREE_NODE,
   ZTREE_ROOT,
   ZTREE_BRANCH,
   ZTREE_LEAF,
   ZTREE_STUB,
-  ZTREE_GHOST,
 } ;
 
 struct ztree;

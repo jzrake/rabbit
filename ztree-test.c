@@ -117,6 +117,10 @@ int test_new_tree()
 {
   struct ztree *tree = ztree_new(1, 0);
   ztree_branch(tree);
+  asserteq(ztree_count(tree, ZTREE_ROOT), 1);
+  asserteq(ztree_count(tree, ZTREE_STUB), 2);
+  asserteq(ztree_count(tree, ZTREE_LEAF), 0);
+
   ztree_del(tree);
   return 0;
 }
