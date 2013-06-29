@@ -103,7 +103,7 @@ void ztree_split(struct ztree *T)
 {
   unsigned int n;
   if (IS_LEAF) {
-    T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
+    ztree_branch(T);
   }
   for (n=0; n < 1<<T->rank; ++n) {
     if (T->children[n] == NULL) {

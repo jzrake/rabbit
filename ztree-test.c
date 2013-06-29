@@ -3,7 +3,7 @@
 #include "ztree.h"
 #include "zmesh.h"
 
-#define nohup 0
+#define nohup 1
 #define asserteq(E, v)printf("%s == %d : %d\n",#E,v,E); assert(E==v||nohup);
 
 static void output_tree(const struct ztree *T, const char *fname);
@@ -120,6 +120,12 @@ int test_new_tree()
   asserteq(ztree_count(tree, ZTREE_ROOT), 1);
   asserteq(ztree_count(tree, ZTREE_STUB), 2);
   asserteq(ztree_count(tree, ZTREE_LEAF), 0);
+
+  ztree_splitn(tree, 2);
+
+  asserteq(ztree_count(tree, ZTREE_ROOT), 1);
+  asserteq(ztree_count(tree, ZTREE_STUB), 0);
+  asserteq(ztree_count(tree, ZTREE_LEAF), 4);
 
   ztree_del(tree);
   return 0;
