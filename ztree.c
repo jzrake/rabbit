@@ -55,7 +55,6 @@ struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
  */
 {
   struct ztree *T = (struct ztree*) malloc(sizeof(struct ztree));
-  T->type = ZTREE_ROOT;
   T->id = 0;
   T->bytes = bytes;
   T->data = malloc(bytes);
@@ -67,9 +66,16 @@ struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
 
 void ztree_del(struct ztree *T)
 /*
- * Free T and all descendant nodes recursively
+ * Free T and all descendant nodes recursively, clear self from parent's list of
+ * children
  */
 {
+  if (T == NULL) {
+    return;
+  }
+  if (!IS_ROOT) {
+    T->parent->children[T->id] = NULL;
+  }
   ztree_prune(T);
   free(T->data);
   free(T);
@@ -86,8 +92,7 @@ void ztree_prune(struct ztree *T)
     ztree_del(T->children[n]);
   }
   free(T->children);
-  T->type = ZTREE_LEAF;
-  T->children = NULL;
+  T->children = NULL; // T is now a leaf
 }
 
 void ztree_split(struct ztree *T)
@@ -98,11 +103,9 @@ void ztree_split(struct ztree *T)
   unsigned int n;
   struct ztree *c;
   if (IS_LEAF) {
-    T->type = ZTREE_BRANCH;
     T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
     for (n=0; n < 1<<T->rank; ++n) {
       T->children[n] = c = ztree_new(T->rank, T->bytes);
-      c->type = ZTREE_STUB;
       c->parent = T;
       c->id = n;
     }
@@ -120,6 +123,28 @@ void ztree_splitn(struct ztree *T, int n)
  */
 {
   while (n--) ztree_split(T);
+}
+
+void ztree_branch(struct ztree *T)
+/*
+ * If T is a leaf, then allocate its list of children, leaving them all as
+ * stubs. If T is a branch then recurse to and branch all descendant leaf nodes.
+ */
+{
+  unsigned int n;
+  if (IS_LEAF) {
+    T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
+    for (n=0; n < 1<<T->rank; ++n) {
+      T->children[n] = NULL;
+    }
+  }
+  else {
+    for (n=0; n < 1<<T->rank; ++n) {
+      if (T->children[n]) {
+	ztree_branch(T->children[n]);
+      }
+    }
+  }
 }
 
 void ztree_get_data_buffer(const struct ztree *T, void **buffer)
@@ -169,7 +194,9 @@ int ztree_descendant_node_count(const struct ztree *T)
   unsigned int n = 1 << T->rank;
   if (IS_LEAF) return 0;
   for (i=0; i < 1<<T->rank; ++i) {
-    n += ztree_descendant_node_count(T->children[i]);
+    if (T->children[i] != NULL) {
+      n += ztree_descendant_node_count(T->children[i]);
+    }
   }
   return n;
 }
@@ -184,7 +211,9 @@ int ztree_descendant_leaf_count(const struct ztree *T)
   if (IS_ROOT && IS_LEAF) return 0;
   if (IS_LEAF) return 1;
   for (i=0; i < 1<<T->rank; ++i) {
-    n += ztree_descendant_leaf_count(T->children[i]);
+    if (T->children[i] != NULL) {
+      n += ztree_descendant_leaf_count(T->children[i]);
+    }
   }
   return n;
 }
@@ -215,6 +244,11 @@ struct ztree *ztree_next(const struct ztree *T, const struct ztree *P)
  * the last one which returns its uncle.
  */
 {
+
+  /* !!!!! */
+  return NULL; /* RE-IMPLEMENT */
+  /* !!!!! */
+
   /* first time through */
   if (P == NULL) {
     return (struct ztree*) T;
@@ -265,7 +299,7 @@ struct ztree *ztree_add_leaf(struct ztree *T, int depth, const int *I)
       break;
     }
     else {
-      ztree_split(leaf);
+      ztree_branch(leaf);
     }
   }
   return leaf;

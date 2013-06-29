@@ -113,9 +113,18 @@ int test_mesh()
   return 0;
 }
 
+int test_new_tree()
+{
+  struct ztree *tree = ztree_new(1, 0);
+  ztree_branch(tree);
+  ztree_del(tree);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
-  test_leaf();
+  test_new_tree();
+  //  test_leaf();
   //  test_tree();
   //  test_mesh();
   return 0;
