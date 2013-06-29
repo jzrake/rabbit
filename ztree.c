@@ -1,3 +1,46 @@
+/*
+ * FILE: ztree.c
+ *
+ * AUTHOR: Jonathan Zrake
+ *
+ * DESCRIPTION:
+ *
+ * Tree are built using a "bottom-up" tree scheme. Leaves may be added to any
+ * level below a given node by specifying the depth and index. Intermediate
+ * nodes are created as necessary.
+ *
+ * Traversals may return branches or leafs. If the target node is not present,
+ * but the search terminates at a leaf, then that leaf, the "closest ancestor"
+ * is returned. If the search terminates at a stub, then NULL is returned.
+ *
+ * When a node is "branched" its child pointer is allocated but none of the
+ * children are created. It is then no longer a leaf but a branch. Child nodes
+ * are only created through the add_leaf function.
+ *
+ * Deleting a node first deletes all of its descendants, then clears itself from
+ * its parent's child list. If all children have been deleted from the parent's
+ * child list then the parent's child list is cleared and the parent returns to
+ * being a leaf.
+ *
+ * A stub is a where a branch contains a child node set to NULL. The stub
+ * implies a tree boundary, which may indicate that the tree continues on a
+ * remote processor. If the stub data is required, a remote query can be issued
+ * to which all processors will respond with a code indicating one of the
+ * following:
+ *
+ * 0: I don't have that node at all
+ * 1: I don't have that node, but it resides below one of my leaves
+ * 2: I have that node, and it's a branch
+ * 3: I have that node, and it's a leaf
+ *
+ * Leaf status is inferred: (T->children == NULL) <=> IS_LEAF
+ *
+ * Root status is inferred: (T->parent == NULL) <=> IS_ROOT
+ *
+ * Stub status is inferred: (T->children[id] == NULL)
+ *
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #define _ZTREE_PRIVATE_
