@@ -43,6 +43,7 @@ void ztree_prune(struct ztree *T)
     ztree_del(T->children[n]);
   }
   free(T->children);
+  T->type = ZTREE_LEAF;
   T->children = NULL;
 }
 
@@ -54,9 +55,11 @@ void ztree_split(struct ztree *T)
   unsigned int n;
   struct ztree *c;
   if (IS_LEAF) {
+    T->type = ZTREE_BRANCH;
     T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
     for (n=0; n < 1<<T->rank; ++n) {
       T->children[n] = c = ztree_new(T->rank, T->bytes);
+      c->type = ZTREE_STUB;
       c->parent = T;
       c->id = n;
     }
