@@ -92,6 +92,17 @@ int test_mesh()
   return 0;
 }
 
+int main(int argc, char **argv)
+{
+  test_tree();
+  test_mesh();
+  return 0;
+}
+
+
+
+
+
 void output_tree(const struct ztree *T, const char *fname)
 {
   FILE *outf = fopen(fname, "w");
@@ -115,11 +126,4 @@ void output_faces(const struct zmesh *M, const char *fname)
     fprintf(outf, "%f %f\n", 0.5 * (xL + xR), z);
   }
   fclose(outf);
-}
-
-int main()
-{
-  test_tree();
-  test_mesh();
-  return 0;
 }

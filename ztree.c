@@ -1,10 +1,10 @@
 #include <stdlib.h>
+#include <string.h>
 #define _ZTREE_PRIVATE_
 #include "ztree.h"
 
 #define IS_ROOT (T->parent == NULL)
 #define IS_LEAF (T->children == NULL)
-#define MAX_RANK 32
 
 struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
 /*
@@ -51,12 +51,13 @@ void ztree_split(struct ztree *T)
  */
 {
   unsigned int n;
+  struct ztree *c;
   if (IS_LEAF) {
     T->children = (struct ztree **) malloc((1<<T->rank) * sizeof(struct ztree *));
     for (n=0; n < 1<<T->rank; ++n) {
-      T->children[n] = ztree_new(T->rank, T->bytes);
-      T->children[n]->parent = T;
-      T->children[n]->id = n;
+      T->children[n] = c = ztree_new(T->rank, T->bytes);
+      c->parent = T;
+      c->id = n;
     }
   }
   else {
@@ -74,9 +75,24 @@ void ztree_splitn(struct ztree *T, int n)
   while (n--) ztree_split(T);
 }
 
-void *ztree_get_data_buffer(const struct ztree *T)
+void ztree_get_data_buffer(const struct ztree *T, void **buffer)
 {
-  return T->data;
+  *buffer = T->data;
+}
+
+void ztree_address(const struct ztree *T, struct zaddress *A)
+ /*
+  * Return the vector index I and the depth relative to the root node
+  */
+{
+  int d;
+  for (d=0; d<T->rank; ++d) {
+    A->index[d] = ztree_index(T, d);
+  }
+  for (d=T->rank; d<ZTREE_MAX_RANK; ++d) {
+    A->index[d] = 0;
+  }
+  A->depth = ztree_depth(T);
 }
 
 int ztree_index(const struct ztree *T, int axis)
@@ -173,9 +189,9 @@ struct ztree *ztree_next(const struct ztree *T, const struct ztree *P)
     else {
       while (P->id == (1<<P->rank)-1) {
         P = P->parent;
-	/* if any ancestor along the way is the starting node, stop there */
+        /* if any ancestor along the way is the starting node, stop there */
         if (P == T) {
-	  return NULL;
+          return NULL;
         }
       }
       /* this child is not the oldest; go on to its next sibling */
@@ -207,7 +223,7 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
   struct ztree *p = (struct ztree *) T;
   int d, pid;
   int target_out_of_range = 0;
-  int I[MAX_RANK];
+  int I[ZTREE_MAX_RANK];
   for (d=0; d<T->rank; ++d) I[d] = I0[d];
 
   if (depth < 0) {
