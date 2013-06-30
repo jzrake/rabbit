@@ -170,7 +170,7 @@ void ztree_branch(struct ztree *T)
   else {
     for (n=0; n < 1<<T->rank; ++n) {
       if (T->children[n] != NULL) {
-	ztree_branch(T->children[n]);
+        ztree_branch(T->children[n]);
       }
     }
   }
@@ -182,9 +182,9 @@ void ztree_get_data_buffer(const struct ztree *T, void **buffer)
 }
 
 void ztree_address(const struct ztree *T, struct zaddress *A)
- /*
-  * Return the vector index I and the depth relative to the root node
-  */
+/*
+ * Return the vector index I and the depth relative to the root node
+ */
 {
   int d;
   for (d=0; d<T->rank; ++d) {
@@ -214,39 +214,6 @@ int ztree_id(const struct ztree *T)
   return T->id;
 }
 
-int ztree_descendant_node_count(const struct ztree *T)
-/*
- * Return the total number of descendants below the present node
- */
-{
-  unsigned int i;
-  unsigned int n = 1 << T->rank;
-  if (IS_LEAF) return 0;
-  for (i=0; i < 1<<T->rank; ++i) {
-    if (T->children[i] != NULL) {
-      n += ztree_descendant_node_count(T->children[i]);
-    }
-  }
-  return n;
-}
-
-int ztree_descendant_leaf_count(const struct ztree *T)
-/*
- * Return the total number of leaf nodes below the present node
- */
-{
-  unsigned int i;
-  unsigned int n = 0;
-  if (IS_ROOT && IS_LEAF) return 0;
-  if (IS_LEAF) return 1;
-  for (i=0; i < 1<<T->rank; ++i) {
-    if (T->children[i] != NULL) {
-      n += ztree_descendant_leaf_count(T->children[i]);
-    }
-  }
-  return n;
-}
-
 int ztree_count(const struct ztree *T, enum ztree_node_status type)
 {
   unsigned int i;
@@ -260,7 +227,7 @@ int ztree_count(const struct ztree *T, enum ztree_node_status type)
   case ZTREE_STUB:
     if (!IS_LEAF) {
       for (i=0; i < 1<<T->rank; ++i) {
-	n += (T->children[i] == NULL);
+        n += (T->children[i] == NULL);
       }
     }
     break;
@@ -268,7 +235,7 @@ int ztree_count(const struct ztree *T, enum ztree_node_status type)
   if (!IS_LEAF) {
     for (i=0; i < 1<<T->rank; ++i) {
       if (T->children[i] != NULL) {
-	n += ztree_count(T->children[i], type);
+        n += ztree_count(T->children[i], type);
       }
     }
   }
@@ -314,7 +281,7 @@ struct ztree *ztree_next(const struct ztree *T, const struct ztree *P)
   else if (P->children != NULL) {
     for (n=0; n < 1<<T->rank; ++n) {
       if (P->children[n]) {
-	return P->children[n];
+        return P->children[n];
       }
     }
   }
@@ -338,25 +305,24 @@ struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
   }
 }
 
-struct ztree *ztree_add_leaf(struct ztree *T, int depth, const int *I)
+struct ztree *ztree_require_node(struct ztree *T, int depth, const int *I)
+/*
+ * Create (or locate) and return the target node relative to T, creating
+ * intermediate branches as necessary. If the target node is out-of-bounds, or
+ * already exists then NULL is returned.
+ */
 {
   struct ztree *leaf;
-
-  while (1) {
-    create_intermediate_nodes = 1;
-    leaf = ztree_travel(T, depth, I);
-    create_intermediate_nodes = 0;
-    if (ztree_depth(leaf) - ztree_depth(T) == depth) {
-      break;
-    }
-    else {
-      ztree_branch(leaf);
-    }
-  }
+  create_intermediate_nodes = 1;
+  leaf = ztree_travel(T, depth, I);
+  create_intermediate_nodes = 0;
   return leaf;
 }
 
-struct ztree *ztree_next_sibling(const struct ztree *T) 
+struct ztree *ztree_next_sibling(const struct ztree *T)
+/*
+ * Return the next child of T's parent node, and NULL if T is the last one
+ */
 {
   int n;
   for (n=T->id + 1; n < 1<<T->rank; ++n) {
@@ -423,30 +389,30 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
    * right if id=1, until we reach the desired depth.
    */
   while (depth--) {
-    
     if (p->children == NULL) {
-      /* return the closest ancestor of the target node if it does not exist */
-      return p;
-    }
-    else {
-      pid = 0;
-      for (d=0; d<T->rank; ++d) {
-        pid += ((1 & (I[d] >> depth)) << d);
+      if (create_intermediate_nodes) {
+        ztree_branch(p);
       }
-
-      if (p->children[pid] == NULL) {
-	if (create_intermediate_nodes) {
-	  p->children[pid] = ztree_new(T->rank, T->bytes);
-	  p->children[pid]->parent = p;
-	  p->children[pid]->id = pid;
-	}
-	else {
-	  return NULL;
-	}
+      else {
+        /* return the closest ancestor of the target node if it does not exist */
+        return p;
       }
-
-      p = p->children[pid];
     }
+    pid = 0;
+    for (d=0; d<T->rank; ++d) {
+      pid += ((1 & (I[d] >> depth)) << d);
+    }
+    if (p->children[pid] == NULL) {
+      if (create_intermediate_nodes) {
+        p->children[pid] = ztree_new(T->rank, T->bytes);
+        p->children[pid]->parent = p;
+        p->children[pid]->id = pid;
+      }
+      else {
+        return NULL;
+      }
+    }
+    p = p->children[pid];
   }
   return p;
 }
