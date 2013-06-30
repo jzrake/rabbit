@@ -44,10 +44,10 @@ int test_tree()
 
   ztree_prune(tree);
   asserteq(ztree_count(tree, ZTREE_NODE), 1);
-  for (n=0; n < 1<<10; ++n) {
-    it = ztree_require_node(tree, 10, &n);
+  for (n=0; n < 1<<12; ++n) {
+    it = ztree_require_node(tree, 12, &n);
   }
-  asserteq(ztree_count(tree, ZTREE_LEAF), 1<<10);
+  asserteq(ztree_count(tree, ZTREE_LEAF), 1<<12);
 
   ztree_del(tree);
   return 0;
