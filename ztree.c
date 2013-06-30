@@ -49,6 +49,8 @@
 #define IS_ROOT (T->parent == NULL)
 #define IS_LEAF (T->children == NULL)
 
+static int create_intermediate_nodes = 0;
+
 struct ztree *ztree_new(unsigned int rank, unsigned int bytes)
 /*
  * Create a new tree node with given rank
@@ -320,8 +322,11 @@ struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
 struct ztree *ztree_add_leaf(struct ztree *T, int depth, const int *I)
 {
   struct ztree *leaf;
+
   while (1) {
+    create_intermediate_nodes = 1;
     leaf = ztree_travel(T, depth, I);
+    create_intermediate_nodes = 0;
     if (ztree_depth(leaf) - ztree_depth(T) == depth) {
       break;
     }
@@ -388,6 +393,7 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
    * right if id=1, until we reach the desired depth.
    */
   while (depth--) {
+    
     if (p->children == NULL) {
       /* return the closest ancestor of the target node if it does not exist */
       return p;
@@ -397,6 +403,18 @@ struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
       for (d=0; d<T->rank; ++d) {
         pid += ((1 & (I[d] >> depth)) << d);
       }
+
+      if (p->children[pid] == NULL) {
+	if (create_intermediate_nodes) {
+	  p->children[pid] = ztree_new(T->rank, T->bytes);
+	  p->children[pid]->parent = p;
+	  p->children[pid]->id = pid;
+	}
+	else {
+	  return NULL;
+	}
+      }
+
       p = p->children[pid];
     }
   }

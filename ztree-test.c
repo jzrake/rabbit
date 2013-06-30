@@ -116,6 +116,7 @@ int test_mesh()
 int test_new_tree()
 {
   struct ztree *tree = ztree_new(1, 0);
+  struct ztree *it;
   ztree_branch(tree);
   asserteq(ztree_count(tree, ZTREE_ROOT), 1);
   asserteq(ztree_count(tree, ZTREE_STUB), 2);
@@ -126,6 +127,13 @@ int test_new_tree()
   asserteq(ztree_count(tree, ZTREE_ROOT), 1);
   asserteq(ztree_count(tree, ZTREE_STUB), 0);
   asserteq(ztree_count(tree, ZTREE_LEAF), 4);
+
+  it = ztree_travel1(tree, 2, 0);
+  asserteq(ztree_depth(it), 2);
+  asserteq(ztree_index(it, 0), 0);
+
+  int I[1] = { 0 };
+  ztree_add_leaf(it, 2, I);
 
   ztree_del(tree);
   return 0;
