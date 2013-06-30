@@ -117,6 +117,9 @@ int test_new_tree()
 {
   struct ztree *tree = ztree_new(1, 0);
   struct ztree *it;
+  int I[1];
+  int nodes = 0;
+
   ztree_branch(tree);
   asserteq(ztree_count(tree, ZTREE_ROOT), 1);
   asserteq(ztree_count(tree, ZTREE_STUB), 2);
@@ -132,9 +135,15 @@ int test_new_tree()
   asserteq(ztree_depth(it), 2);
   asserteq(ztree_index(it, 0), 0);
 
-  int I[1] = { 0 };
+  I[0] = 0;
   ztree_add_leaf(it, 2, I);
 
+  it = NULL;
+  while ((it = ztree_next(tree, it))) {
+    nodes += 1;
+  }
+
+  asserteq(ztree_count(tree, ZTREE_NODE), nodes);
   ztree_del(tree);
   return 0;
 }

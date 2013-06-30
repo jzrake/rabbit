@@ -39,6 +39,7 @@
  *
  * Stub status is inferred: (T->children[id] == NULL)
  *
+ * Dead branch status is inferred: (T->children[n] == NULL for all n)
  */
 
 #include <stdlib.h>
@@ -81,6 +82,32 @@ void ztree_del(struct ztree *T)
   ztree_prune(T);
   free(T->data);
   free(T);
+}
+
+enum ztree_node_status ztree_status(const struct ztree *T)
+/*
+ * Return the status of a given node. Every node has exactly one of the possible
+ * status flags: stub, leaf, dead, or branch.
+ */
+{
+  if (T == NULL) {
+    return ZTREE_STUB; // it's a stub
+  }
+  else if (T->children == NULL) {
+    return ZTREE_LEAF;
+  }
+  else {
+    int n, dead=1;
+    for (n=0; n < 1<<T->rank; ++n) {
+      dead *= (T->children[n] == NULL);
+    }
+    if (dead) {
+      return ZTREE_DEAD;
+    }
+    else {
+      return ZTREE_BRANCH;
+    }
+  }
 }
 
 void ztree_prune(struct ztree *T)
@@ -220,7 +247,7 @@ int ztree_descendant_leaf_count(const struct ztree *T)
   return n;
 }
 
-int ztree_count(const struct ztree *T, enum ztree_node_type type)
+int ztree_count(const struct ztree *T, enum ztree_node_status type)
 {
   unsigned int i;
   unsigned int n = 0;
@@ -229,6 +256,7 @@ int ztree_count(const struct ztree *T, enum ztree_node_type type)
   case ZTREE_LEAF: n += IS_LEAF; break;
   case ZTREE_NODE: n += 1; break;
   case ZTREE_ROOT: n += IS_ROOT; break;
+  case ZTREE_DEAD: n += ztree_status(T) == ZTREE_DEAD; break;
   case ZTREE_STUB:
     if (!IS_LEAF) {
       for (i=0; i < 1<<T->rank; ++i) {
@@ -273,41 +301,32 @@ struct ztree *ztree_next(const struct ztree *T, const struct ztree *P)
  * the last one which returns its uncle.
  */
 {
-
-  /* !!!!! */
-  return NULL; /* RE-IMPLEMENT */
-  /* !!!!! */
-
+  int n;
   /* first time through */
   if (P == NULL) {
     return (struct ztree*) T;
   }
-  /* do nothing if the starting node is a leaf. */
+  /* do nothing if T is a leaf */
   else if (IS_LEAF) {
     return NULL;
   }
-  /* visit your children if you have any, starting with the youngest */
+  /* visit P's first child if it's a branch */
   else if (P->children != NULL) {
-    return P->children[0];
-  }
-  else {
-    /* move on to the next sibling if you are not the oldest child */
-    if (P->id != (1<<P->rank)-1) {
-      return P->parent->children[P->id + 1];
-    }
-    /* if you are the oldest sibling go to your closest ancestor who is not */
-    else {
-      while (P->id == (1<<P->rank)-1) {
-        P = P->parent;
-        /* if any ancestor along the way is the starting node, stop there */
-        if (P == T) {
-          return NULL;
-        }
+    for (n=0; n < 1<<T->rank; ++n) {
+      if (P->children[n]) {
+	return P->children[n];
       }
-      /* this child is not the oldest; go on to its next sibling */
-      return P->parent->children[P->id + 1];
     }
   }
+  /* P is a leaf or a dead branch; go on to the next sibling if there is one */
+  while (ztree_next_sibling(P) == NULL) {
+    P = P->parent;
+    /* if any ancestor along the way is the starting node, stop there */
+    if (P == T) {
+      return NULL;
+    }
+  }
+  return ztree_next_sibling(P);
 }
 
 struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
@@ -335,6 +354,17 @@ struct ztree *ztree_add_leaf(struct ztree *T, int depth, const int *I)
     }
   }
   return leaf;
+}
+
+struct ztree *ztree_next_sibling(const struct ztree *T) 
+{
+  int n;
+  for (n=T->id + 1; n < 1<<T->rank; ++n) {
+    if (T->parent->children[n]) {
+      return T->parent->children[n];
+    }
+  }
+  return NULL;
 }
 
 struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)
