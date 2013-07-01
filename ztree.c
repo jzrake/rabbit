@@ -39,7 +39,7 @@
  *
  * Stub status is inferred: (T->children[id] == NULL)
  *
- * Dead branch status is inferred: (T->children[n] == NULL for all n)
+ * Dead branch status is inferred: (T->children[id] == NULL for all id)
  */
 
 #include <stdlib.h>
@@ -305,20 +305,6 @@ struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P)
   }
 }
 
-struct ztree *ztree_require_node(struct ztree *T, int depth, const int *I)
-/*
- * Create (or locate) and return the target node relative to T, creating
- * intermediate branches as necessary. If the target node is out-of-bounds, or
- * already exists then NULL is returned.
- */
-{
-  struct ztree *leaf;
-  create_intermediate_nodes = 1;
-  leaf = ztree_travel(T, depth, I);
-  create_intermediate_nodes = 0;
-  return leaf;
-}
-
 struct ztree *ztree_next_sibling(const struct ztree *T)
 /*
  * Return the next child of T's parent node, and NULL if T is the last one
@@ -331,6 +317,20 @@ struct ztree *ztree_next_sibling(const struct ztree *T)
     }
   }
   return NULL;
+}
+
+struct ztree *ztree_require_node(struct ztree *T, int depth, const int *I0)
+/*
+ * Create (or locate) and return the target node relative to T, creating
+ * intermediate branches as necessary. If the target node is out of bounds then
+ * NULL is returned.
+ */
+{
+  struct ztree *node;
+  create_intermediate_nodes = 1;
+  node = ztree_travel(T, depth, I0);
+  create_intermediate_nodes = 0;
+  return node;
 }
 
 struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0)

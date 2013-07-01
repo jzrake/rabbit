@@ -16,11 +16,11 @@ struct ztree;
 struct zaddress;
 struct ztree *ztree_new(unsigned int rank, unsigned int bytes);
 struct ztree *ztree_parent(const struct ztree *T);
-struct ztree *ztree_next(const struct ztree *T, const struct ztree *S);
+struct ztree *ztree_next(const struct ztree *T, const struct ztree *P);
 struct ztree *ztree_next_leaf(const struct ztree *T, const struct ztree *P);
 struct ztree *ztree_next_sibling(const struct ztree *T);
-struct ztree *ztree_require_node(struct ztree *T, int depth, const int *I);
-struct ztree *ztree_travel(const struct ztree *T, int depth, const int *I0);
+struct ztree *ztree_require_node(struct ztree *T, int d, const int *I0);
+struct ztree *ztree_travel(const struct ztree *T, int d, const int *I0);
 struct ztree *ztree_travel1(const struct ztree *T, int d, int i);
 struct ztree *ztree_travel2(const struct ztree *T, int d, int i, int j);
 struct ztree *ztree_travel3(const struct ztree *T, int d, int i, int j, int k);
@@ -34,7 +34,7 @@ void ztree_get_data_buffer(const struct ztree *T, void **buffer);
 void ztree_address(const struct ztree *T, struct zaddress *A);
 int ztree_index(const struct ztree *T, int axis);
 int ztree_id(const struct ztree *T);
-int ztree_count(const struct ztree *T, enum ztree_node_status type); // A
+int ztree_count(const struct ztree *T, enum ztree_node_status type);
 int ztree_depth(const struct ztree *T);
 int ztree_rank(const struct ztree *T);
 
