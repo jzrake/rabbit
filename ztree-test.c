@@ -71,6 +71,8 @@ int test_read()
   load_tree(tree1, "tree.dat");
 
   asserteq(ztree_count(tree0, ZTREE_NODE), ztree_count(tree1, ZTREE_NODE));
+  ztree_del(tree0);
+  ztree_del(tree1);
   return 0;
 }
 
