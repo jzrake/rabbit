@@ -3,92 +3,79 @@
 #include "ztree.h"
 #include "zmesh.h"
 
+#define TREE_FILE_NAME "data/tree-1d.dat"
 #define nohup 0
 #define asserteq(E, v)printf("%s == %d : %d\n",#E,v,E); assert(E==v||nohup);
 
-static void output_tree(const struct ztree *T, const char *fname);
-static void output_faces(const struct zmesh *M, const char *fname);
+void output_tree(const struct ztree *T, const char *fname);
+void output_faces(const struct zmesh *M, const char *fname);
+void save_tree(const struct ztree *T, const char *fname);
+void load_tree(struct ztree *T, const char *fname);
 
 int test_tree()
 {
-  struct ztree *tree = ztree_new(3, sizeof(double));
-  struct ztree *it = NULL;
+  struct ztree *tree = ztree_new(1, 0);
+  struct ztree *it;
+  int n, I[1];
+  int nodes = 0;
 
-  asserteq(ztree_rank(tree), 3);
-  asserteq(ztree_descendant_node_count(tree), 0);
-  asserteq(ztree_descendant_leaf_count(tree), 0);
+  ztree_branch(tree);
+  asserteq(ztree_count(tree, ZTREE_ROOT), 1);
+  asserteq(ztree_count(tree, ZTREE_STUB), 2);
+  asserteq(ztree_count(tree, ZTREE_LEAF), 0);
 
-  ztree_split(tree);
-  asserteq(ztree_descendant_node_count(tree), 8);
-  asserteq(ztree_descendant_leaf_count(tree), 8);
+  ztree_splitn(tree, 2);
 
-  ztree_prune(tree);
-  asserteq(ztree_descendant_node_count(tree), 0);
-  asserteq(ztree_descendant_leaf_count(tree), 0);
+  asserteq(ztree_count(tree, ZTREE_ROOT), 1);
+  asserteq(ztree_count(tree, ZTREE_STUB), 0);
+  asserteq(ztree_count(tree, ZTREE_LEAF), 4);
 
-  ztree_split(tree);
-  ztree_split(tree);
-  asserteq(ztree_descendant_node_count(tree), 72);
-  asserteq(ztree_descendant_leaf_count(tree), 64);
+  it = ztree_travel1(tree, 2, 0);
+  asserteq(ztree_depth(it), 2);
+  asserteq(ztree_index(it, 0), 0);
 
-  int I[3] = { 0, 1, 2 };
-  struct ztree *child = ztree_travel(tree, 2, I);
+  I[0] = 0;
+  it = ztree_require_node(it, 2, I);
+  asserteq(ztree_depth(it), 4);
+  asserteq(ztree_status(ztree_require_node(tree, -1, I)), ZTREE_STUB);
 
-  asserteq(ztree_depth(child), 2);
-  asserteq(ztree_index(child, 0), 0);
-  asserteq(ztree_index(child, 1), 1);
-  asserteq(ztree_index(child, 2), 2);
-
-  ztree_prune(tree);
-  ztree_split(tree);
-  ztree_split(tree);
-  int node_count = 0; // will include root node (=72 + 1)
   it = NULL;
-  while ((it = ztree_next(tree, it))) ++node_count;
-  asserteq(ztree_descendant_node_count(tree), node_count - 1);
-  ztree_del(tree);
+  while ((it = ztree_next(tree, it))) {
+    nodes += 1;
+  }
+  asserteq(ztree_count(tree, ZTREE_NODE), nodes);
 
-  /* Test for more complex 1D traversal */
-  tree = ztree_new(1, 0);
   ztree_prune(tree);
-  ztree_splitn(tree, 5);
-  ztree_split(ztree_travel1(tree, 3, 2));
-  ztree_split(ztree_travel1(tree, 3, 5));
-  it = ztree_travel1(tree, 6, 16);
-  asserteq(ztree_index(it, 0), 16);
-  asserteq(ztree_depth(it), 6);
-  ztree_travel1(it, 0, -1);
-  ztree_del(tree);
+  asserteq(ztree_count(tree, ZTREE_NODE), 1);
+  for (n=0; n < 1<<12; ++n) {
+    it = ztree_require_node(tree, 12, &n);
+  }
+  asserteq(ztree_count(tree, ZTREE_LEAF), 1<<12);
 
+  ztree_del(tree);
+  return 0;
+}
+
+int test_read()
+{
+  struct ztree *tree0 = ztree_new(1, 0);
+  struct ztree *tree1 = ztree_new(1, 0);
+  int n;
+
+  for (n=0; n < 1<<10; ++n) if (n % 131 == 0) ztree_require_node(tree0, 10, &n);
+  for (n=0; n < 1<<8 ; ++n) if (n %  83 == 0) ztree_require_node(tree0,  8, &n);
+  for (n=0; n < 1<<6 ; ++n) if (n %  13 == 0) ztree_require_node(tree0,  6, &n);
+  for (n=0; n < 1<<4 ; ++n) if (n %   7 == 0) ztree_require_node(tree0,  4, &n);
+
+  save_tree(tree0, "tree.dat");
+  load_tree(tree1, "tree.dat");
+
+  asserteq(ztree_count(tree0, ZTREE_NODE), ztree_count(tree1, ZTREE_NODE));
   return 0;
 }
 
 int test_mesh()
 {
-  struct ztree *tree = ztree_new(1, sizeof(double));
-  struct zmesh *mesh = zmesh_new(tree);
-
-  ztree_splitn(tree, 5);
-  zmesh_build_faces(mesh);
-  asserteq(zmesh_num_faces(mesh), 31);
-
-  ztree_prune(tree);
-  zmesh_build_faces(mesh);
-  asserteq(zmesh_num_faces(mesh), 0);
-
-  ztree_prune(tree);
-  ztree_splitn(tree, 5);
-  ztree_split(ztree_travel1(tree, 3, 2));
-  ztree_split(ztree_travel1(tree, 3, 5));
-  zmesh_build_faces(mesh);
-  asserteq(zmesh_num_faces(mesh), 39);
-
-  output_tree(tree, "tree.dat");
-  output_faces(mesh, "faces.dat");
-
-  zmesh_del(mesh);
-  ztree_del(tree);
-
   return 0;
 }
 
@@ -96,6 +83,7 @@ int main(int argc, char **argv)
 {
   test_tree();
   test_mesh();
+  test_read();
   return 0;
 }
 
@@ -126,4 +114,25 @@ void output_faces(const struct zmesh *M, const char *fname)
     fprintf(outf, "%f %f\n", 0.5 * (xL + xR), z);
   }
   fclose(outf);
+}
+
+void save_tree(const struct ztree *T, const char *fname)
+{
+  FILE *outf = fopen(fname, "w");
+  struct ztree *it = NULL;
+  while ((it = ztree_next_leaf(T, it))) {
+    fprintf(outf, "%d %d\n", ztree_depth(it), ztree_index(it, 0));
+  }
+  fclose(outf);
+}
+
+void load_tree(struct ztree *T, const char *fname)
+{
+  FILE *inf = fopen(fname, "r");
+  int depth, I;
+  while (!feof(inf)) {
+    fscanf(inf, "%d %d\n", &depth, &I);
+    ztree_require_node(T, depth, &I);
+  }
+  fclose(inf);
 }

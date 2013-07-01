@@ -67,13 +67,15 @@ void zmesh_build_faces(struct zmesh *M)
       nR = ztree_travel1(it, 0, +1);
       if (nL) {
 	/* the volume to the left has a strictly coarser refinement level */
-	if (ztree_depth(nL) < ztree_depth(it) && ztree_isleaf(nL)) {
+	if (ztree_depth(nL) < ztree_depth(it) &&
+	    ztree_status(nL) == ZTREE_LEAF) {
 	  push_face(M, nL, it);
 	}
       }
       if (nR) {
 	/* the volume to the right has a coarser or equal refinement level */
-	if (ztree_depth(nR) <= ztree_depth(it) && ztree_isleaf(nR)) {
+	if (ztree_depth(nR) <= ztree_depth(it) &&
+	    ztree_status(nR) == ZTREE_LEAF) {
 	  push_face(M, it, nR);
 	}
       }
