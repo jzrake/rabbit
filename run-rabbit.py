@@ -60,18 +60,16 @@ def test2():
         Yv.append(coords[1])
 
     for node in mesh.volumes.values():
-        m = node.morton()
+        m = node.coordinates()
         Xn.append(m[0])
         Yn.append(m[1])
-        i, j = node.index
-        zorder = interleave_bits2(*node.index)
-        plt.text(m[0], m[1], preorder_label2D(node.depth, zorder, mesh.MAX_DEPTH))
+        plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
 
     for face in mesh.faces:
         plt.plot([face.vertex0[0], face.vertex1[0]],
                  [face.vertex0[1], face.vertex1[1]], c='k')
 
-    #plt.scatter(Xn, Yn, c='r')
+    plt.scatter(Xn, Yn, c='r')
     plt.scatter(Xv, Yv, c='b')
     plt.axis('equal')
     plt.show()

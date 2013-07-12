@@ -73,10 +73,23 @@ class RabbitVolume(object):
         I = tuple([ti + i for ti, i in zip(target_index, index)])
         return self.mesh.volumes[(self.depth + depth, I)]
 
-    def morton(self):
+    def coordinates(self):
+        """
+        Return the location of the center of the node's volume in units of leafs
+        one below the maximum depth
+        """
         d = self.depth
         D = self.mesh.MAX_DEPTH
         return tuple([(2 * i + 1) << (D - d) for i in self.index])
+
+    def preorder_label(self):
+        """
+        Return a unique integer label for this node corresponding to the order
+        it would be visited in a pre-order traversal of the mesh tree, were it
+        densely fleshed out
+        """
+        zorder = interleave_bits2(*self.index)
+        return preorder_label2D(self.depth, zorder, self.mesh.MAX_DEPTH)
 
     def __repr__(self):
         return "<node: depth=%d index=%s>" % (self.depth, self.index)
