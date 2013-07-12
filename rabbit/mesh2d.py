@@ -1,13 +1,13 @@
 
-MAX_DEPTH = 5
-
 class RabbitMesh(object):
-    def __init__(self, rank):
+    def __init__(self, rank, max_depth=5):
         self.volumes = { }
         self.rank = rank
+        self.MAX_DEPTH = max_depth
 
     def add_volume(self, depth, index):
         assert len(index) == self.rank
+        assert depth <= self.MAX_DEPTH
         self.volumes[(depth, index)] = RabbitVolume(self, depth, index)
         return self.volumes[(depth, index)]
 
@@ -34,7 +34,7 @@ class RabbitMesh(object):
         for v in self.volumes.values():
             # for 2D only
             d = v.depth
-            f = MAX_DEPTH - d + 1
+            f = self.MAX_DEPTH - d + 1
             vert00 = ((v.index[0] + 0) << f, (v.index[1] + 0) << f)
             vert01 = ((v.index[0] + 0) << f, (v.index[1] + 1) << f)
             vert10 = ((v.index[0] + 1) << f, (v.index[1] + 0) << f)
@@ -74,7 +74,7 @@ class RabbitVolume(object):
 
     def morton(self):
         d = self.depth
-        D = MAX_DEPTH
+        D = self.mesh.MAX_DEPTH
         return tuple([(2 * i + 1) << (D - d) for i in self.index])
 
     def __repr__(self):
@@ -91,7 +91,7 @@ class RabbitFace(object):
         self.vertex1 = vertex1
         self.axis = axis
         self.size = size
-        self.depth = ({1<<n: n for n in range(MAX_DEPTH + 1)})[self.size]
+        self.depth = ({1<<n: n for n in range(mesh.MAX_DEPTH + 2)})[self.size]
 
 
 def compare_face(A):
@@ -120,29 +120,71 @@ def contains_face(A, B):
             A.vertex1[my_axis] >= B.vertex1[my_axis])
 
 
-def preorder_label(depth, index, max_depth=MAX_DEPTH):
+def preorder_label(depth, index, max_depth, m):
     """
     Return the order in which a given node is visited in a preorder traversal of
-    a fully fleshed out tree having max_depth
+    a fully fleshed out tree having max_depth and branching ratio m
     """
-    label = 0
-    for d in range(depth):
-        if index & (1 << d) == 0:
-            label += 1
-        else:
-            label += 2 << (d + max_depth - depth)
-    return label
-
-
-def preorder_label2D(depth, index, max_depth=MAX_DEPTH):
-    """
-    Return the order in which a given node is visited in a preorder traversal of
-    a fully fleshed out tree having max_depth
-    """
+    assert depth <= max_depth
     label = 0
     for d in range(depth):
         n = depth - d - 1 # bit
         h = max_depth - d - 1 # height
-        s = (index >> 2*n) & (1 | 2)
-        label += 1 + (h + (1 << 2*h)) * s
+        nb = m**n # number of nodes at the target level below current
+        sd = (index / nb) % m
+        Md = tree_size(m, h)
+        adding = sd * Md + 1
+        label += adding
     return label
+
+
+def preorder_label1D(depth, index, max_depth):
+    return preorder_label(depth, index, max_depth, 2)
+
+
+def preorder_label2D(depth, index, max_depth):
+    return preorder_label(depth, index, max_depth, 4)
+
+
+def preorder_label3D(depth, index, max_depth):
+    return preorder_label(depth, index, max_depth, 8)
+
+
+def tree_size(m, n):
+    """ Return the size of a tree of max depth depth n and branching ratio m """
+    return (m**(n+1) - 1) / (m - 1)
+
+
+def interleave_bits2(a, b):
+    """
+    Create a 64-bit integer by interleaving the bits of the 32-bit integers a
+    and b
+    """
+    assert a < (1 << 32)
+    assert b < (1 << 32)
+    base_a = [(a >> n) & 1 for n in range(32)]
+    base_b = [(b >> n) & 1 for n in range(32)]
+    res = [ ]
+    for n in range(32):
+        res.append(base_a[n])
+        res.append(base_b[n])
+    return sum([r << n for n,r in enumerate(res)])
+
+
+def interleave_bits3(a, b, c):
+    """
+    Create a 64-bit integer by interleaving the bits of the 21-bit integers a,
+    b, and c
+    """
+    assert a < (1 << 21)
+    assert b < (1 << 21)
+    assert c < (1 << 21)
+    base_a = [(a >> n) & 1 for n in range(21)]
+    base_b = [(b >> n) & 1 for n in range(21)]
+    base_c = [(c >> n) & 1 for n in range(21)]
+    res = [ ]
+    for n in range(21):
+        res.append(base_a[n])
+        res.append(base_b[n])
+        res.append(base_c[n])
+    return sum([r << n for n,r in enumerate(res)])
