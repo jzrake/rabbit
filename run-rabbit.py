@@ -15,12 +15,15 @@ def test1():
     mesh.add_volume(0, (0,0))
     mesh.containing_volume(1, (1,1))
 
-    print mesh.containing_volume(1, (1,1))
-    print n0.travel(0, (-1,0))
+    #print mesh.containing_volume(1, (1,1))
+    #print n0.travel(0, (-1,0))
+    #print mesh.get_volume(0, (0,0)).morton()
+    #print n1.morton()
 
-    print mesh.get_volume(0, (0,0)).morton()
-    print n1.morton()
-    assert mesh.add_volume(5, (31, 31)).morton() == (63, 63)
+    m = (1 << (MAX_DEPTH + 1)) - 1
+    assert mesh.add_volume(5, (31, 31)).morton() == (m, m)
+    assert preorder_label(2, 2, max_depth=3) == 9
+    assert preorder_label(3, 7, max_depth=3) == 14
 
 
 def test2():
@@ -52,29 +55,14 @@ def test2():
         Xn.append(m[0])
         Yn.append(m[1])
 
-    dups = set()
-    last_face = None
-
-    for face in sorted(mesh.faces, key=compare_face):
-        if last_face != None:
-            if contains_face(last_face, face):
-                dups.add(last_face)
-        last_face = face
-
-    mesh.faces -= dups
-
-    print "there are %d unique faces and %d duplicates" % (
-        len(mesh.faces), len(dups))
-
     for face in mesh.faces:
-        if face.depth == 1 or True:
-            plt.plot([face.vertex0[0], face.vertex1[0]],
-                     [face.vertex0[1], face.vertex1[1]], c='k')
+        plt.plot([face.vertex0[0], face.vertex1[0]],
+                 [face.vertex0[1], face.vertex1[1]], c='k')
 
     plt.scatter(Xn, Yn, c='r')
     plt.scatter(Xv, Yv, c='b')
     plt.axis('equal')
     plt.show()
 
-#test1()
+test1()
 test2()

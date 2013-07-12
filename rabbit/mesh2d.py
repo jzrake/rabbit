@@ -1,5 +1,5 @@
 
-MAX_DEPTH = 14
+MAX_DEPTH = 5
 
 class RabbitMesh(object):
     def __init__(self, rank):
@@ -26,7 +26,7 @@ class RabbitMesh(object):
         try:
             return self.get_volume(depth, index)
         except KeyError:
-            return self.containing_volume(depth - 1, tuple([i/2 for i in index]))
+            return self.containing_volume(depth-1, tuple([i/2 for i in index]))
 
     def create_vertices(self):
         self.vertices = set()
@@ -44,6 +44,16 @@ class RabbitMesh(object):
                                RabbitFace(self, vert00, vert01),
                                RabbitFace(self, vert01, vert11),
                                RabbitFace(self, vert10, vert11)])
+        dups = set()
+        last_face = None
+        for face in sorted(self.faces, key=compare_face):
+            if last_face != None:
+                if contains_face(last_face, face):
+                    dups.add(last_face)
+            last_face = face
+        self.faces -= dups
+        print "there are %d unique faces and %d duplicates" % (
+            len(self.faces), len(dups))
 
 
 class RabbitVolume(object):
@@ -85,6 +95,9 @@ class RabbitFace(object):
 
 
 def compare_face(A):
+    """
+    Return a tuple which orders the faces depth-first
+    """
     if A.axis == 0: other_axis = 1; my_axis = 0
     if A.axis == 1: other_axis = 0; my_axis = 1
     return (A.axis, # orientation (x, y, z) - directed
@@ -95,7 +108,7 @@ def compare_face(A):
 
 def contains_face(A, B):
     """
-    Returns True if the face A contains the face B
+    Return True if the face A contains the face B
     """
     if A.axis == 0: other_axis = 1; my_axis = 0
     if A.axis == 1: other_axis = 0; my_axis = 1
@@ -105,3 +118,17 @@ def contains_face(A, B):
         return False
     return (A.vertex0[my_axis] <= B.vertex0[my_axis] and
             A.vertex1[my_axis] >= B.vertex1[my_axis])
+
+
+def preorder_label(depth, index, max_depth=MAX_DEPTH):
+    """
+    Return the order in which a given node is visited in a preorder traversal of
+    a fully fleshed out tree having max_depth
+    """
+    label = 0
+    for d in range(depth):
+        if index & (1 << d) == 0:
+            label += 1
+        else:
+            label += 2 << (d + max_depth - depth)
+    return label
