@@ -25,6 +25,11 @@ def test1():
     assert preorder_label(2, 2, max_depth=3) == 9
     assert preorder_label(3, 7, max_depth=3) == 14
 
+    assert [preorder_label2D(1, i, max_depth=1) for i in range(4)] == [1,2,3,4]
+    assert [preorder_label2D(1, i, max_depth=2) for i in range(4)] == [1,6,11,16]
+    assert [preorder_label2D(2, i, max_depth=2) for i in range(16)] == [
+        2,3,4,5,7,8,9,10,12,13,14,15,17,18,19,20]
+
 
 def test2():
     import matplotlib.pyplot as plt
@@ -65,4 +70,7 @@ def test2():
     plt.show()
 
 test1()
-test2()
+#test2()
+
+
+

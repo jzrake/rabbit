@@ -132,3 +132,17 @@ def preorder_label(depth, index, max_depth=MAX_DEPTH):
         else:
             label += 2 << (d + max_depth - depth)
     return label
+
+
+def preorder_label2D(depth, index, max_depth=MAX_DEPTH):
+    """
+    Return the order in which a given node is visited in a preorder traversal of
+    a fully fleshed out tree having max_depth
+    """
+    label = 0
+    for d in range(depth):
+        n = depth - d - 1 # bit
+        h = max_depth - d - 1 # height
+        s = (index >> 2*n) & (1 | 2)
+        label += 1 + (h + (1 << 2*h)) * s
+    return label
