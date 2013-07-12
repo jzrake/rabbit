@@ -1,5 +1,5 @@
 
-MAX_DEPTH = 12
+MAX_DEPTH = 14
 
 class RabbitMesh(object):
     def __init__(self, rank):
@@ -34,16 +34,16 @@ class RabbitMesh(object):
         for v in self.volumes.values():
             # for 2D only
             d = v.depth
-            f = D -  MAX_DEPTH + 1
+            f = MAX_DEPTH - d + 1
             vert00 = ((v.index[0] + 0) << f, (v.index[1] + 0) << f)
             vert01 = ((v.index[0] + 0) << f, (v.index[1] + 1) << f)
             vert10 = ((v.index[0] + 1) << f, (v.index[1] + 0) << f)
             vert11 = ((v.index[0] + 1) << f, (v.index[1] + 1) << f)
             self.vertices |= set([vert00, vert01, vert10, vert11])
-            self.faces |= set([((d, 0), (vert00, vert10)),
-                               ((d, 1), (vert00, vert01)),
-                               ((d, 0), (vert01, vert11)),
-                               ((d, 1), (vert10, vert11))])
+            self.faces |= set([RabbitFace(self, vert00, vert10),
+                               RabbitFace(self, vert00, vert01),
+                               RabbitFace(self, vert01, vert11),
+                               RabbitFace(self, vert10, vert11)])
 
 
 class RabbitVolume(object):
@@ -71,27 +71,37 @@ class RabbitVolume(object):
         return "<RabbitVolume @ depth=%d index=%s>" % (self.depth, self.index)
 
 
-def compare_face(a):
-    if a[0][1] == 0: other_axis = 1; my_axis = 0
-    if a[0][1] == 1: other_axis = 0; my_axis = 1
-    return (a[0][1], # orientation (x, y, z) - directed
-            a[1][0][other_axis], # coordinate of other axis
-            a[1][0][my_axis], # left-end point
-            a[0][0]) # face depth
+class RabbitFace(object):
+    def __init__(self, mesh, vertex0, vertex1):
+        di = [b - a for a, b in zip(vertex0, vertex1)]
+        assert di.count(0) == len(di) - 1
+        axis, size = next(([n,d] for n,d in enumerate(di) if d != 0))
+        self.mesh = mesh
+        self.vertex0 = vertex0
+        self.vertex1 = vertex1
+        self.axis = axis
+        self.size = size
+        self.depth = ({1<<n: n for n in range(MAX_DEPTH + 1)})[self.size]
+
+
+def compare_face(A):
+    if A.axis == 0: other_axis = 1; my_axis = 0
+    if A.axis == 1: other_axis = 0; my_axis = 1
+    return (A.axis, # orientation (x, y, z) - directed
+            A.vertex0[other_axis], # coordinate of other axis
+            A.vertex0[my_axis], # left-end point
+            A.depth) # face depth
 
 
 def contains_face(A, B):
     """
     Returns True if the face A contains the face B
     """
-    if A[0][1] == 0: other_axis = 1; my_axis = 0
-    if A[0][1] == 1: other_axis = 0; my_axis = 1
-    if A[0][1] != B[0][1]: # same orientation
+    if A.axis == 0: other_axis = 1; my_axis = 0
+    if A.axis == 1: other_axis = 0; my_axis = 1
+    if A.axis != B.axis: # different orientation?
         return False
-    if A[1][0][other_axis] != B[1][0][other_axis]: # different line
+    if A.vertex0[other_axis] != B.vertex0[other_axis]: # not co-linear?
         return False
-
-    if A[0][1] == 0: my_axis = 0
-    if A[0][1] == 1: my_axis = 1
-    return (A[1][0][my_axis] <= B[1][0][my_axis] and
-            A[1][1][my_axis] >= B[1][1][my_axis])
+    return (A.vertex0[my_axis] <= B.vertex0[my_axis] and
+            A.vertex1[my_axis] >= B.vertex1[my_axis])

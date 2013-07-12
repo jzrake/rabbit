@@ -67,14 +67,14 @@ def test2():
         len(mesh.faces), len(dups))
 
     for face in mesh.faces:
-        if face[0][0] == 1 or True:
-            plt.plot([face[1][0][0], face[1][1][0]],
-                     [face[1][0][1], face[1][1][1]], c='k')
+        if face.depth == 1 or True:
+            plt.plot([face.vertex0[0], face.vertex1[0]],
+                     [face.vertex0[1], face.vertex1[1]], c='k')
 
     plt.scatter(Xn, Yn, c='r')
     plt.scatter(Xv, Yv, c='b')
     plt.axis('equal')
     plt.show()
 
-test1()
+#test1()
 test2()
