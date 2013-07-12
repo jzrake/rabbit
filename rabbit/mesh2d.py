@@ -40,16 +40,17 @@ class RabbitMesh(object):
             vert10 = ((v.index[0] + 1) << f, (v.index[1] + 0) << f)
             vert11 = ((v.index[0] + 1) << f, (v.index[1] + 1) << f)
             self.vertices |= set([vert00, vert01, vert10, vert11])
-            self.faces |= set([RabbitFace(self, vert00, vert10),
-                               RabbitFace(self, vert00, vert01),
-                               RabbitFace(self, vert01, vert11),
-                               RabbitFace(self, vert10, vert11)])
+            self.faces |= set([RabbitFace(self, v, vert00, vert10),
+                               RabbitFace(self, v, vert00, vert01),
+                               RabbitFace(self, v, vert01, vert11),
+                               RabbitFace(self, v, vert10, vert11)])
         dups = set()
         last_face = None
         for face in sorted(self.faces, key=compare_face):
             if last_face != None:
                 if contains_face(last_face, face):
                     dups.add(last_face)
+                    face.nodes |= last_face.nodes # face eats other face's nodes
             last_face = face
         self.faces -= dups
         print "there are %d unique faces and %d duplicates" % (
@@ -78,11 +79,11 @@ class RabbitVolume(object):
         return tuple([(2 * i + 1) << (D - d) for i in self.index])
 
     def __repr__(self):
-        return "<RabbitVolume @ depth=%d index=%s>" % (self.depth, self.index)
+        return "<node: depth=%d index=%s>" % (self.depth, self.index)
 
 
 class RabbitFace(object):
-    def __init__(self, mesh, vertex0, vertex1):
+    def __init__(self, mesh, node, vertex0, vertex1):
         di = [b - a for a, b in zip(vertex0, vertex1)]
         assert di.count(0) == len(di) - 1
         axis, size = next(([n,d] for n,d in enumerate(di) if d != 0))
@@ -92,6 +93,7 @@ class RabbitFace(object):
         self.axis = axis
         self.size = size
         self.depth = ({1<<n: n for n in range(mesh.MAX_DEPTH + 2)})[self.size]
+        self.nodes = set([node])
 
 
 def compare_face(A):
