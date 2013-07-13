@@ -73,14 +73,18 @@ class RabbitVolume(object):
         I = tuple([ti + i for ti, i in zip(target_index, index)])
         return self.mesh.volumes[(self.depth + depth, I)]
 
-    def coordinates(self):
+    def coordinates(self, normalize=False):
         """
         Return the location of the center of the node's volume in units of leafs
-        one below the maximum depth
+        one below the maximum depth, unless normalize is True in which case node
+        positions are mapped to the unit interval
         """
         d = self.depth
         D = self.mesh.MAX_DEPTH
-        return tuple([(2 * i + 1) << (D - d) for i in self.index])
+        if normalize:
+            return tuple([(2 * i + 1) / (1.0*(2 << d)) for i in self.index])
+        else:
+            return tuple([(2 * i + 1) << (D - d) for i in self.index])
 
     def preorder_label(self):
         """
@@ -203,3 +207,37 @@ def interleave_bits3(a, b, c):
         res.append(base_b[n])
         res.append(base_c[n])
     return sum([r << n for n,r in enumerate(res)])
+
+
+def plot_mesh(mesh, numbers=True, vertices=True, faces=True):
+    import matplotlib.pyplot as plt
+    Xv = [ ]
+    Yv = [ ]
+    Xn = [ ]
+    Yn = [ ]
+    Zn = [ ]
+
+    mesh.create_vertices()
+
+    if vertices:
+        for coords in mesh.vertices:
+            Xv.append(coords[0])
+            Yv.append(coords[1])
+        plt.scatter(Xv, Yv, c='b')
+
+    if faces:
+        for face in mesh.faces:
+            plt.plot([face.vertex0[0], face.vertex1[0]],
+                     [face.vertex0[1], face.vertex1[1]], c='k')
+
+    for node in mesh.volumes.values():
+        m = node.coordinates()
+        Xn.append(m[0])
+        Yn.append(m[1])
+        Zn.append(getattr(node, 'data', 0.0))
+        if numbers:
+            plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
+
+    plt.scatter(Xn, Yn, c=Zn)
+    plt.axis('equal')
+    plt.show()

@@ -29,7 +29,6 @@ def test1():
     assert preorder_label1D(2, 3, max_depth=3) == 12
     assert preorder_label1D(3, 6, max_depth=3) == 13
     assert preorder_label1D(3, 7, max_depth=3) == 14
-
     assert [preorder_label2D(1, i, max_depth=1) for i in range(4)] == [1,2,3,4]
     assert [preorder_label2D(1, i, max_depth=2) for i in range(4)] == [1,6,11,16]
     assert [preorder_label2D(2, i, max_depth=2) for i in range(16)] == [
@@ -48,31 +47,25 @@ def test2():
         for j in range(4):
             mesh.add_volume(2, (i, j))
 
-    mesh.create_vertices()
+    plot_mesh(mesh)
 
-    Xv = [ ]
-    Yv = [ ]
-    Xn = [ ]
-    Yn = [ ]
 
-    for coords in mesh.vertices:
-        Xv.append(coords[0])
-        Yv.append(coords[1])
+def test3():
+    import math
+    D = 4
+    mesh = RabbitMesh(2, max_depth=D)
 
-    for node in mesh.volumes.values():
-        m = node.coordinates()
-        Xn.append(m[0])
-        Yn.append(m[1])
-        plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
+    for i in range(1<<D):
+        for j in range(1<<D):
+            vol = mesh.add_volume(D, (i, j))
+            x, y = vol.coordinates(normalize=True)
+            x -= 0.5
+            y -= 0.5
+            vol.data = math.sin(x*x + y*y)
 
-    for face in mesh.faces:
-        plt.plot([face.vertex0[0], face.vertex1[0]],
-                 [face.vertex0[1], face.vertex1[1]], c='k')
+    plot_mesh(mesh, numbers=False, vertices=False)
 
-    plt.scatter(Xn, Yn, c='r')
-    plt.scatter(Xv, Yv, c='b')
-    plt.axis('equal')
-    plt.show()
 
 test1()
 test2()
+test3()
