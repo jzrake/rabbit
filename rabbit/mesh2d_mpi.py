@@ -78,18 +78,22 @@ class RabbitMesh(object):
         return recv[0]
 
     def load_balance(self):
-
         """
-        Determine the number of nodes currently on each processor
+        Re-determine the ownership of nodes with respect to processor. The
+        global list of nodes is sorted according to its preorder label, then
+        partitioned evenly, and finally redistributed.
         """
+        # ----------------------------------------------------------------------
+        # Determine the number of nodes currently on each processor
+        # ----------------------------------------------------------------------
         proc_node_count = np.zeros(self.comm.size, dtype=int)
         proc_node_count[self.comm.rank] = len(self.volumes)
         self.comm.Allreduce(MPI.IN_PLACE, proc_node_count)
 
-        """
-        Assign a global index to each node, indicating its order in a compressed
-        global list of nodes
-        """
+        # ----------------------------------------------------------------------
+        # Assign a global index to each node, indicating its order in a
+        # compressed global list of nodes
+        # ----------------------------------------------------------------------
         node_index = proc_node_count.cumsum()[self.comm.rank - 1] if (
             self.comm.rank != 0) else 0
 
