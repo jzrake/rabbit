@@ -102,9 +102,30 @@ class RabbitMesh(object):
         nodes_per_proc = self.global_node_count() / self.comm.size
 
         for node in ordered_nodes:
-            node.index = node_index
+            node.global_index = node_index
             node_index += 1
-            node.host_proc = node.index / nodes_per_proc
+            node.host_proc = node.global_index / nodes_per_proc
+
+        # ----------------------------------------------------------------------
+        # Send each node to its new host processor
+        # ----------------------------------------------------------------------
+        requests = [ ]
+        for proc in range(self.comm.size):
+            nodes_for_proc = np.array([node.index for node in ordered_nodes if
+                                       node.host_proc == proc], dtype=long)
+            requests.append(self.comm.Isend(nodes_for_proc, proc))
+
+        for proc in range(self.comm.size):
+            status = MPI.Status()
+            self.comm.Probe(proc, status=status)
+            num_longs_from_proc = status.Get_count(datatype=MPI.LONG)
+            longs_from_proc = np.empty(num_longs_from_proc, dtype=long)
+            self.comm.Recv(longs_from_proc, proc)
+            #print longs_from_proc
+
+        for request in requests:
+            request.Wait()
+
 
 
 class RabbitVolume(object):
