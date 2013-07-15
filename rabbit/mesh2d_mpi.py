@@ -319,7 +319,8 @@ def interleave_bits3(a, b, c):
     return sum([r << n for n,r in enumerate(res)])
 
 
-def plot_mesh(mesh, numbers=True, vertices=True, faces=True):
+def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
+              scatter_args=dict()):
     import matplotlib.pyplot as plt
     Xv = [ ]
     Yv = [ ]
@@ -348,6 +349,30 @@ def plot_mesh(mesh, numbers=True, vertices=True, faces=True):
         if numbers:
             plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
 
-    plt.scatter(Xn, Yn, c=Zn)
+    plt.scatter(Xn, Yn, c=Zn, **scatter_args)
     plt.axis('equal')
     plt.show()
+
+
+def load_meshes(fnames):
+    """
+    Load a mesh a collection of pickles, presumably written by different
+    processors
+    """
+    import pickle
+    meshes = [ ]
+
+    for fname in fnames:
+        infile = open(fname, 'r')
+        new_mesh = pickle.load(infile)
+        new_mesh.node_label_range = [0, MAX_LABEL]
+        meshes.append(new_mesh)
+
+    for mesh in meshes:
+        print "adding %d nodes from mesh" % len(mesh.volumes)
+        for node in mesh.volumes.values():
+            new_node = meshes[0].add_volume(node.depth, node.index)
+            new_node.host_proc = node.host_proc
+
+    meshes[0].comm = MPI.COMM_WORLD
+    return meshes[0]
