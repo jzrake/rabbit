@@ -13,6 +13,10 @@ def test1():
             mesh.add_volume(2, (i, j))
 
     mesh.load_balance()
-    #print [node.host_proc for node in mesh.volumes.values()]
+
+    for rank in range(mesh.comm.size):
+        if rank == mesh.comm.rank:
+            print rank, mesh.node_label_range, len(mesh.volumes)
+        mesh.comm.Barrier()
 
 test1()

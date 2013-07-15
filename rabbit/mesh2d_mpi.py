@@ -14,12 +14,12 @@ class RabbitMesh(object):
         if self.comm.rank == self.comm.size - 1:
             self.node_label_range[1] = MAX_LABEL
 
-    def add_volume(self, depth, index):
+    def add_volume(self, depth, index, force=False):
         assert len(index) == self.rank
         assert depth <= self.MAX_DEPTH
         node = RabbitVolume(self, depth, index)
         if (self.node_label_range[0] <= node.preorder_label() and
-            self.node_label_range[1] >  node.preorder_label()):
+            self.node_label_range[1] >  node.preorder_label()) or force:
             self.volumes[(depth, index)] = node
             return node
         else:
@@ -111,21 +111,50 @@ class RabbitMesh(object):
         # ----------------------------------------------------------------------
         requests = [ ]
         for proc in range(self.comm.size):
-            nodes_for_proc = np.array([node.index for node in ordered_nodes if
-                                       node.host_proc == proc], dtype=long)
-            requests.append(self.comm.Isend(nodes_for_proc, proc))
+            if proc == self.comm.rank: continue
+            nodes_for_proc = [node.pack() for node in ordered_nodes if
+                              node.host_proc == proc]
+            requests.append(self.comm.isend(nodes_for_proc, proc))
 
         for proc in range(self.comm.size):
-            status = MPI.Status()
-            self.comm.Probe(proc, status=status)
-            num_longs_from_proc = status.Get_count(datatype=MPI.LONG)
-            longs_from_proc = np.empty(num_longs_from_proc, dtype=long)
-            self.comm.Recv(longs_from_proc, proc)
-            #print longs_from_proc
+            if proc == self.comm.rank: continue
+            nodes_from_proc = self.comm.recv(source=proc)
+            for packed_node in nodes_from_proc:
+                added_node = self.add_volume(packed_node['depth'],
+                                             packed_node['index'], force=True)
+                added_node.data = packed_node['data']
+                added_node.host_proc = self.comm.rank
 
         for request in requests:
             request.Wait()
 
+        # ----------------------------------------------------------------------
+        # Remove sent nodes from this processor's mesh
+        # ----------------------------------------------------------------------
+        for key, node in self.volumes.items():
+            if node.host_proc != self.comm.rank:
+                del self.volumes[key]
+
+        # ----------------------------------------------------------------------
+        # Re-calculate the node label range on this processor
+        # ----------------------------------------------------------------------
+        new_ordered_nodes = sorted(self.volumes.values(),
+                                   key=lambda node: node.preorder_label())
+        if self.comm.rank == self.comm.size - 1:
+            self.node_label_range[1] = MAX_LABEL
+        else:
+            self.node_label_range[1] = new_ordered_nodes[-1].preorder_label()
+
+        procL = (self.comm.rank - 1) % self.comm.size
+        procR = (self.comm.rank + 1) % self.comm.size
+
+        self.comm.send(self.node_label_range[1], dest=procR)
+        my_lower_label = self.comm.recv(source=procL)
+
+        if self.comm.rank == 0:
+            self.node_label_range[0] = 0
+        else:
+            self.node_label_range[0] = my_lower_label
 
 
 class RabbitVolume(object):
@@ -133,6 +162,7 @@ class RabbitVolume(object):
         self.mesh = mesh
         self.depth = depth
         self.index = index
+        self.data = 0.0
 
     def travel(self, depth, index):
         if depth == 0:
@@ -165,6 +195,13 @@ class RabbitVolume(object):
         """
         zorder = interleave_bits2(*self.index)
         return preorder_label2D(self.depth, zorder, self.mesh.MAX_DEPTH)
+
+    def pack(self):
+        """
+        Return a dictionary with the necessary data members to rebuild this node
+        on a different processor
+        """
+        return dict(depth=self.depth, index=self.index, data=self.data)
 
     def __repr__(self):
         return "<node: depth=%d index=%s>" % (self.depth, self.index)
