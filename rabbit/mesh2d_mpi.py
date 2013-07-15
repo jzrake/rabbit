@@ -102,14 +102,15 @@ class RabbitMesh(object):
         nodes_per_proc = self.global_node_count() / self.comm.size
 
         for node in ordered_nodes:
-            node.global_index = node_index
+            node.global_compressed_index = node_index
             node_index += 1
-            node.host_proc = node.global_index / nodes_per_proc
+            node.host_proc = node.global_compressed_index / nodes_per_proc
 
         # ----------------------------------------------------------------------
         # Send each node to its new host processor
         # ----------------------------------------------------------------------
         requests = [ ]
+
         for proc in range(self.comm.size):
             if proc == self.comm.rank: continue
             nodes_for_proc = [node.pack() for node in ordered_nodes if
@@ -148,8 +149,9 @@ class RabbitMesh(object):
         procL = (self.comm.rank - 1) % self.comm.size
         procR = (self.comm.rank + 1) % self.comm.size
 
-        self.comm.send(self.node_label_range[1], dest=procR)
-        my_lower_label = self.comm.recv(source=procL)
+        if self.comm.size > 1:
+            self.comm.send(self.node_label_range[1], dest=procR)
+            my_lower_label = self.comm.recv(source=procL)
 
         if self.comm.rank == 0:
             self.node_label_range[0] = 0
