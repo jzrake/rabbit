@@ -105,6 +105,8 @@ class RabbitMesh(object):
             node.global_compressed_index = node_index
             node_index += 1
             node.host_proc = node.global_compressed_index / nodes_per_proc
+            if node.host_proc >= self.comm.size:
+                node.host_proc = self.comm.size - 1
 
         # ----------------------------------------------------------------------
         # Send each node to its new host processor
@@ -320,7 +322,7 @@ def interleave_bits3(a, b, c):
 
 
 def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
-              scatter_args=dict()):
+              volume_args=dict()):
     import matplotlib.pyplot as plt
     Xv = [ ]
     Yv = [ ]
@@ -349,7 +351,7 @@ def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
         if numbers:
             plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
 
-    plt.scatter(Xn, Yn, c=Zn, **scatter_args)
+    plt.scatter(Xn, Yn, c=Zn, **volume_args)
     plt.axis('equal')
     plt.show()
 
@@ -367,6 +369,7 @@ def load_meshes(fnames):
         new_mesh = pickle.load(infile)
         new_mesh.node_label_range = [0, MAX_LABEL]
         meshes.append(new_mesh)
+        infile.close()
 
     for mesh in meshes:
         print "adding %d nodes from mesh" % len(mesh.volumes)

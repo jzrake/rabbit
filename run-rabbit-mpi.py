@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
+import os
 import pickle
 from rabbit.mesh2d_mpi import *
 
-def test1():
+def build_mesh_parallel():
     mesh = RabbitMesh(2, max_depth=10)
 
     for i in range(4):
@@ -28,12 +29,18 @@ def test1():
     outf.close()
 
 
-def test2():
-    mesh = load_meshes(["mesh.%04d.pickle"%i for i in [0,3]])
+def read_mesh_serial():
+    import glob
+    mesh = load_meshes(glob.glob("mesh.*.pickle"))
     for node in mesh.volumes.values():
         node.data = node.host_proc
-    plot_mesh(mesh, numbers=False, vertices=False, scatter_args=dict(s=100))
+    plot_mesh(mesh, numbers=False, vertices=False, volume_args=dict(s=100))
 
 
-test1()
-#test2()
+os.system('rm -f *.pickle')
+build_mesh_parallel()
+
+if MPI.COMM_WORLD.rank == 0:
+    read_mesh_serial()
+
+MPI.COMM_WORLD.Barrier()
