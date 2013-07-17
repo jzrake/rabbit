@@ -19,7 +19,8 @@ class RabbitMesh(object):
         assert depth <= self.MAX_DEPTH
         node = RabbitVolume(self, depth, index, ghost=ghost)
         if (self.node_label_range[0] <= node.preorder_label() and
-            self.node_label_range[1] >  node.preorder_label()) or force:
+            self.node_label_range[1] >  node.preorder_label()) or (
+            force or ghost):
             self.volumes[(depth, index)] = node
             return node
         else:
@@ -163,6 +164,20 @@ class RabbitMesh(object):
                                       zip(node.index, offset)])
                 if self.containing_volume(node.depth, target_index) == None:
                     self.add_volume(node.depth, target_index, ghost=True)
+
+    def synchronize_ghost_nodes(self):
+        for node in self.volumes.values():
+            if not node.ghost: continue
+            label = node.preorder_label()
+            proc0 = 0
+            proc1 = self.comm.size
+            while proc1 - proc0 > 1:
+                middle = (proc0 + proc1) / 2
+                if self.node_partition[middle] < label:
+                    proc0 = middle
+                else:
+                    proc1 = middle
+            node.host_proc = proc0
 
 
 class RabbitVolume(object):

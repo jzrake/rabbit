@@ -54,11 +54,14 @@ def test2():
     mesh = RabbitMesh(2)
     for i in range(8):
         for j in range(8):
-            if i < 4 or j < 4:
-                node = mesh.add_volume(3, (i, j))
+            #if i < 4 or j < 4:
+            node = mesh.add_volume(3, (i, j))
 
+    mesh.load_balance()
     mesh.locate_ghost_nodes()
-    plot_mesh(mesh, numbers=False, ghost_args=dict(marker='x'))
+    mesh.synchronize_ghost_nodes()
+
+    #plot_mesh(mesh, numbers=False, ghost_args=dict(marker='x'))
 
 
-test1()
+test2()
