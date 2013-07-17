@@ -61,6 +61,9 @@ def test2():
     mesh.locate_ghost_nodes()
     mesh.synchronize_ghost_nodes()
 
+    #for node in mesh.get_volumes(only_ghost=True):
+    #    print node.host_proc
+
     #plot_mesh(mesh, numbers=False, ghost_args=dict(marker='x'))
 
 

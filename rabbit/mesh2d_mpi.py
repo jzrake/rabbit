@@ -71,10 +71,18 @@ class RabbitMesh(object):
         print "there are %d unique faces and %d duplicates" % (
             len(self.faces), len(dups))
 
+    def get_volumes(self, include_ghost=False, only_ghost=False):
+        if only_ghost:
+            return [n for n in self.volumes.values() if n.ghost]
+        elif not include_ghost:
+            return [n for n in self.volumes.values() if not n.ghost]
+        else:
+            return [n for n in self.volumes.values()]
+
     def global_node_count(self):
         recv = np.zeros(1, dtype=int)
         send = np.zeros(1, dtype=int)
-        send[0] = len(self.volumes)
+        send[0] = len(self.get_volumes())
         self.comm.Allreduce(send, recv, op=MPI.SUM)
         return recv[0]
 
@@ -88,7 +96,7 @@ class RabbitMesh(object):
         # Determine the number of nodes currently on each processor
         # ----------------------------------------------------------------------
         proc_node_count = np.zeros(self.comm.size, dtype=int)
-        proc_node_count[self.comm.rank] = len(self.volumes)
+        proc_node_count[self.comm.rank] = len(self.get_volumes())
         self.comm.Allreduce(MPI.IN_PLACE, proc_node_count)
 
         # ----------------------------------------------------------------------
@@ -98,8 +106,8 @@ class RabbitMesh(object):
         node_index = proc_node_count.cumsum()[self.comm.rank - 1] if (
             self.comm.rank != 0) else 0
 
-        ordered_nodes = sorted(self.volumes.values(),
-                              key=lambda node: node.preorder_label())
+        ordered_nodes = sorted(self.get_volumes(),
+                               key=lambda node: node.preorder_label())
         nodes_per_proc = self.global_node_count() / self.comm.size
 
         for node in ordered_nodes:
@@ -136,16 +144,16 @@ class RabbitMesh(object):
         # Remove sent nodes from this processor's mesh
         # ----------------------------------------------------------------------
         for key, node in self.volumes.items():
-            if node.host_proc != self.comm.rank:
+            if node.host_proc != self.comm.rank and not node.ghost:
                 del self.volumes[key]
 
         # ----------------------------------------------------------------------
         # Re-calculate the node label range on all processors
         # ----------------------------------------------------------------------
-        new_ordered_nodes = sorted(self.volumes.values(),
+        new_ordered_nodes = sorted(self.get_volumes(),
                                    key=lambda node: node.preorder_label())
         my_lower_label = 0 if self.comm.rank == 0 else min(
-            [node.preorder_label() for node in self.volumes.values()])
+            [node.preorder_label() for node in self.get_volumes()])
 
         self.node_partition = np.zeros(self.comm.size, dtype=int)
         self.node_partition[self.comm.rank] = my_lower_label
@@ -155,7 +163,7 @@ class RabbitMesh(object):
             self.comm.rank != self.comm.size - 1) else MAX_LABEL
 
     def locate_ghost_nodes(self):
-        for node in self.volumes.values():
+        for node in self.get_volumes():
             for offset in [[0, -1],
                            [0, +1],
                            [-1, 0],
@@ -166,8 +174,7 @@ class RabbitMesh(object):
                     self.add_volume(node.depth, target_index, ghost=True)
 
     def synchronize_ghost_nodes(self):
-        for node in self.volumes.values():
-            if not node.ghost: continue
+        for node in self.get_volumes(only_ghost=True):
             label = node.preorder_label()
             proc0 = 0
             proc1 = self.comm.size
@@ -369,7 +376,7 @@ def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
             plt.plot([face.vertex0[0], face.vertex1[0]],
                      [face.vertex0[1], face.vertex1[1]], c='k')
 
-    for node in mesh.volumes.values():
+    for node in mesh.get_volumes(include_ghost=True):
         m = node.coordinates()
         if node.ghost:
             Xg.append(m[0])
