@@ -7,19 +7,21 @@ from rabbit.mesh2d_mpi import *
 
 def build_mesh_parallel():
     mesh = RabbitMesh(2, max_depth=10)
-
-    for i in range(32):
-        for j in range(32):
-            if i >= 16 or j >= 16:
+    if True: # uniform-depth mesh
+        for i in range(32):
+            for j in range(32):
                 mesh.add_volume(5, (i, j))
-
-    for i in range(8):
-        for j in range(8):
-            if i < 4 and j < 4:
-                mesh.add_volume(3, (i, j))
-
+    else: # more interesting mesh
+        for i in range(32):
+            for j in range(32):
+                if i >= 16 or j >= 16:
+                    mesh.add_volume(5, (i, j))
+        for i in range(8):
+            for j in range(8):
+                if i < 4 and j < 4:
+                    mesh.add_volume(3, (i, j))
+        
     mesh.load_balance()
-
     for rank in range(mesh.comm.size):
         if rank == mesh.comm.rank:
             print rank, mesh.node_label_range, len(mesh.volumes)
@@ -59,4 +61,4 @@ def test2():
     plot_mesh(mesh, numbers=False, ghost_args=dict(marker='x'))
 
 
-test2()
+test1()

@@ -139,26 +139,19 @@ class RabbitMesh(object):
                 del self.volumes[key]
 
         # ----------------------------------------------------------------------
-        # Re-calculate the node label range on this processor
+        # Re-calculate the node label range on all processors
         # ----------------------------------------------------------------------
         new_ordered_nodes = sorted(self.volumes.values(),
                                    key=lambda node: node.preorder_label())
-        if self.comm.rank == self.comm.size - 1:
-            self.node_label_range[1] = MAX_LABEL
-        else:
-            self.node_label_range[1] = new_ordered_nodes[-1].preorder_label()
+        my_lower_label = 0 if self.comm.rank == 0 else min(
+            [node.preorder_label() for node in self.volumes.values()])
 
-        procL = (self.comm.rank - 1) % self.comm.size
-        procR = (self.comm.rank + 1) % self.comm.size
-
-        if self.comm.size > 1:
-            self.comm.send(self.node_label_range[1], dest=procR)
-            my_lower_label = self.comm.recv(source=procL)
-
-        if self.comm.rank == 0:
-            self.node_label_range[0] = 0
-        else:
-            self.node_label_range[0] = my_lower_label
+        self.node_partition = np.zeros(self.comm.size, dtype=int)
+        self.node_partition[self.comm.rank] = my_lower_label
+        self.comm.Allreduce(MPI.IN_PLACE, self.node_partition, op=MPI.SUM)
+        self.node_label_range[0] = my_lower_label
+        self.node_label_range[1] = self.node_partition[self.comm.rank + 1] if (
+            self.comm.rank != self.comm.size - 1) else MAX_LABEL
 
     def locate_ghost_nodes(self):
         for node in self.volumes.values():
