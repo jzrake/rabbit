@@ -4,17 +4,19 @@ import os
 import pickle
 from rabbit.mesh2d_mpi import *
 
+
 def build_mesh_parallel():
     mesh = RabbitMesh(2, max_depth=10)
 
-    for i in range(4):
-        for j in range(4):
-            if i >= 2 or j >= 2:
-                mesh.add_volume(2, (i, j))
+    for i in range(32):
+        for j in range(32):
+            if i >= 16 or j >= 16:
+                mesh.add_volume(5, (i, j))
 
-    for i in range(4):
-        for j in range(4):
-            mesh.add_volume(3, (i, j))
+    for i in range(8):
+        for j in range(8):
+            if i < 4 and j < 4:
+                mesh.add_volume(3, (i, j))
 
     mesh.load_balance()
 
@@ -37,10 +39,24 @@ def read_mesh_serial():
     plot_mesh(mesh, numbers=False, vertices=False, volume_args=dict(s=100))
 
 
-os.system('rm -f *.pickle')
-build_mesh_parallel()
+def test1():
+    os.system('rm -f *.pickle')
+    build_mesh_parallel()
+    MPI.COMM_WORLD.Barrier()
+    if MPI.COMM_WORLD.rank == 0:
+        read_mesh_serial()
+    MPI.COMM_WORLD.Barrier()
 
-if MPI.COMM_WORLD.rank == 0:
-    read_mesh_serial()
 
-MPI.COMM_WORLD.Barrier()
+def test2():
+    mesh = RabbitMesh(2)
+    for i in range(8):
+        for j in range(8):
+            if i < 4 or j < 4:
+                node = mesh.add_volume(3, (i, j))
+
+    mesh.locate_ghost_nodes()
+    plot_mesh(mesh, numbers=False, ghost_args=dict(marker='x'))
+
+
+test2()

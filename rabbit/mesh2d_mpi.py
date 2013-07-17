@@ -14,10 +14,10 @@ class RabbitMesh(object):
         if self.comm.rank == self.comm.size - 1:
             self.node_label_range[1] = MAX_LABEL
 
-    def add_volume(self, depth, index, force=False):
+    def add_volume(self, depth, index, force=False, ghost=False):
         assert len(index) == self.rank
         assert depth <= self.MAX_DEPTH
-        node = RabbitVolume(self, depth, index)
+        node = RabbitVolume(self, depth, index, ghost=ghost)
         if (self.node_label_range[0] <= node.preorder_label() and
             self.node_label_range[1] >  node.preorder_label()) or force:
             self.volumes[(depth, index)] = node
@@ -36,7 +36,7 @@ class RabbitMesh(object):
     def containing_volume(self, depth, index):
         assert len(index) == self.rank
         if depth < 0:
-            raise KeyError
+            return None
         try:
             return self.get_volume(depth, index)
         except KeyError:
@@ -160,15 +160,27 @@ class RabbitMesh(object):
         else:
             self.node_label_range[0] = my_lower_label
 
+    def locate_ghost_nodes(self):
+        for node in self.volumes.values():
+            for offset in [[0, -1],
+                           [0, +1],
+                           [-1, 0],
+                           [+1, 0]]:
+                target_index = tuple([i + oi for i, oi in
+                                      zip(node.index, offset)])
+                if self.containing_volume(node.depth, target_index) == None:
+                    self.add_volume(node.depth, target_index, ghost=True)
+
 
 class RabbitVolume(object):
-    def __init__(self, mesh, depth, index):
+    def __init__(self, mesh, depth, index, ghost=False):
         self.mesh = mesh
         self.depth = depth
         self.index = index
+        self.ghost = ghost
         self.data = 0.0
 
-    def travel(self, depth, index):
+    def travel(self, depth, index, containing=False):
         if depth == 0:
             target_index = self.index
         elif depth < 0:
@@ -176,7 +188,10 @@ class RabbitVolume(object):
         elif depth > 0:
             target_index = tuple([i << -depth for i in self.index])
         I = tuple([ti + i for ti, i in zip(target_index, index)])
-        return self.mesh.volumes[(self.depth + depth, I)]
+        if containing:
+            return self.mesh.containing_volume(self.depth + depth, I)
+        else:
+            return self.mesh.get_volume(self.depth + depth, I)
 
     def coordinates(self, normalize=False):
         """
@@ -322,14 +337,17 @@ def interleave_bits3(a, b, c):
 
 
 def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
-              volume_args=dict()):
+              volume_args=dict(),
+              ghost_args=dict()):
     import matplotlib.pyplot as plt
-    Xv = [ ]
+    Xv = [ ] # vertex coordinates
     Yv = [ ]
-    Xn = [ ]
+    Xn = [ ] # node (volume) coordinates
     Yn = [ ]
     Zn = [ ]
-
+    Xg = [ ] # ghost coordinates
+    Yg = [ ]
+    Zg = [ ]
     mesh.create_vertices()
 
     if vertices:
@@ -345,13 +363,19 @@ def plot_mesh(mesh, numbers=True, vertices=True, faces=True,
 
     for node in mesh.volumes.values():
         m = node.coordinates()
-        Xn.append(m[0])
-        Yn.append(m[1])
-        Zn.append(getattr(node, 'data', 0.0))
+        if node.ghost:
+            Xg.append(m[0])
+            Yg.append(m[1])
+            Zg.append(node.data)
+        else:
+            Xn.append(m[0])
+            Yn.append(m[1])
+            Zn.append(node.data)
         if numbers:
             plt.text(m[0]+0.1, m[1]+0.1, node.preorder_label())
 
     plt.scatter(Xn, Yn, c=Zn, **volume_args)
+    plt.scatter(Xg, Yg, c=Zg, **ghost_args)
     plt.axis('equal')
     plt.show()
 
