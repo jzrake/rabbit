@@ -1,2 +1,6 @@
 doc
 *.pyc
+*.o
+*.mesh
+/src/rabfile
+/src/rabrun
