@@ -1,4 +1,16 @@
 #include <stdio.h>
+
+/*
+ * JEN Jenkins (default)
+ * BER Bernstein
+ * SAX Shift-Add-Xor
+ * OAT One-at-a-time
+ * FNV Fowler/Noll/Vo
+ * SFH Paul Hsieh
+ * MUR MurmurHash v3 (see note)
+ */
+
+#define HASH_FUNCTION HASH_SAX
 #include "uthash.h"
 #include "tpl.h"
 
@@ -11,13 +23,22 @@
 #define PRINT_MESSAGES ALMOST_NEVER
 
 
-
-#define MSG(level, format, ...) do {		\
-    if (level < PRINT_MESSAGES) {		\
+#define MSG(level, format, ...) do {            \
+    if (level < PRINT_MESSAGES) {               \
       fprintf(stderr, "[%s]$ ", __FUNCTION__);  \
       fprintf(stderr, format, __VA_ARGS__);     \
+      fprintf(stderr, "\n");                    \
     }                                           \
   } while (0)                                   \
+
+
+#include <time.h>
+#define TIME(cmd) do {                                  \
+    clock_t start = clock();                            \
+    cmd;                                                \
+    printf("[%s]$ %s took %5.4f ms\n", __FUNCTION__,    \
+           #cmd, 1e3*(clock() - start)/CLOCKS_PER_SEC); \
+  } while (0);
 
 
 #define RABBIT_ANY      (1 << 0)
@@ -33,7 +54,6 @@ typedef struct rabbit_face rabbit_face;
 typedef struct rabbit_edge rabbit_edge;
 typedef struct
 {
-  int rank;
   int max_depth;
   int doubles_per_node;
   int doubles_per_edge;
@@ -49,6 +69,18 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
 void         rabbit_mesh_build(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
+
+
+/*
+ *
+ * private functions
+ *
+ */
+
+static uint64_t node_preorder_label(rabbit_node *node);
+static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
+
+#define tree_size_below(m, n) ((1 << (3*((n)+1)) - 1) / ((m) - 1))
 
 
 struct rabbit_mesh {
@@ -96,7 +128,7 @@ void rabbit_mesh_del(rabbit_mesh *M)
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
     HASH_DEL(M->edges, edge);
-    MSG(1, "removing edge %d\n", HASH_CNT(hh, M->edges));
+    MSG(2, "removing edge %d", HASH_CNT(hh, M->edges));
 
     free(edge->data);
     free(edge);
@@ -119,7 +151,11 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
     node->mesh = M;
     node->data = (double*) calloc(M->config.doubles_per_node, sizeof(double));
     memcpy(node->index, index, 4 * sizeof(int));
+
     HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
+    MSG(1, "added node with preorder label %"PRIu64,
+        node_preorder_label(node));
+
     return node;
   }
 }
@@ -208,7 +244,6 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
   HASH_ITER(hh, M->nodes, node, tmp) {
 
-
     int n; // starting node counter, [0, 3)
     int a, ai; // axis counter, [0,4)
     int d = node->index[0]; // depth
@@ -235,7 +270,9 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
       for (n=0; n<4; ++n) {
 
-        HASH_FIND(hh, M->edges, vertices, 6 * sizeof(int), existing_edge);
+
+	HASH_FIND(hh, M->edges, vertices, 6 * sizeof(int), existing_edge);
+
 
         if (existing_edge == NULL) {
 
@@ -251,7 +288,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
           }
 
           HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
-          MSG(1, "adding edge #%d\n", HASH_CNT(hh, M->edges));
+          MSG(2, "adding edge %d", HASH_CNT(hh, M->edges));
 
         }
       }
@@ -281,15 +318,62 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   tpl_free(tn);
 }
 
+int node_preorder_compare(rabbit_node *a, rabbit_node *b)
+{
+  return node_preorder_label(a) - node_preorder_label(b);
+}
+
+uint64_t node_preorder_label(rabbit_node *node)
+{
+  int m = 8; // branching ratio
+  int d, n, h, nb, sd, Md, adding, label=0;
+  uint64_t index = interleave_bits3(node->index[1],
+                                    node->index[2],
+                                    node->index[3]);
+
+  for (d=0; d<node->index[0]; ++d) {
+
+    n = node->index[0] - d - 1; // bit
+    h = node->mesh->config.max_depth - d - 1;
+    nb = 1 << (3*n);
+    sd = (index / nb) % m;
+    Md = tree_size_below(m, h);
+    adding = sd * Md + 1;
+    label += adding;
+
+  }
+
+  return label;
+}
+
+
+uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
+/*
+ * Create a 64-bit integer by interleaving the bits of the 21-bit integers a, b,
+ * and c
+ */
+{
+  int n;
+  uint64_t label = 0;
+
+  for (n=0; n<21; ++n) {
+    label += ((a >> n) & 1) << (3*n + 0);
+    label += ((b >> n) & 1) << (3*n + 1);
+    label += ((c >> n) & 1) << (3*n + 2);
+  }
+
+  return label;
+}
+
 
 int main()
 {
-  rabbit_cfg config = { 3, 10, 4, 4 };
+  rabbit_cfg config = { 10, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 4;
+  int D = 5;
 
   for (i=0; i<(1<<D); ++i) {
     for (j=0; j<(1<<D); ++j) {
@@ -303,9 +387,15 @@ int main()
     }
   }
 
-  rabbit_mesh_build(mesh);
+  TIME(
+       HASH_SRT(hh, mesh->nodes, node_preorder_compare)
+       );
 
-  MSG(0, "there are %d total nodes\n",
+  TIME(
+       rabbit_mesh_build(mesh)
+       );
+
+  MSG(0, "there are %d total nodes",
       rabbit_mesh_count(mesh, RABBIT_ANY));
 
   rabbit_mesh_dump(mesh, "rabbit.mesh");
