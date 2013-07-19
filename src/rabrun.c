@@ -1,19 +1,17 @@
-#include <stdio.h>
-
-/*
- * JEN Jenkins (default)
- * BER Bernstein
- * SAX Shift-Add-Xor
- * OAT One-at-a-time
- * FNV Fowler/Noll/Vo
- * SFH Paul Hsieh
- * MUR MurmurHash v3 (see note)
+/* -----------------------------------------------------------------------------
+ * FILE:
+ *
+ * AUTHOR: Jonathan Zrake
+ *
+ * DESCRIPTION:
+ *
+ *
+ * -----------------------------------------------------------------------------
  */
 
-#define HASH_FUNCTION HASH_SAX
-#include "uthash.h"
-#include "tpl.h"
+#include <stdio.h>
 
+/* debug level options */
 #define ALWAYS 3
 #define SOMETIMES 2
 #define ALMOST_NEVER 1
@@ -22,15 +20,13 @@
 /* print messages how often? */
 #define PRINT_MESSAGES ALMOST_NEVER
 
-
-#define MSG(level, format, ...) do {            \
-    if (level < PRINT_MESSAGES) {               \
-      fprintf(stderr, "[%s]$ ", __FUNCTION__);  \
-      fprintf(stderr, format, __VA_ARGS__);     \
-      fprintf(stderr, "\n");                    \
-    }                                           \
-  } while (0)                                   \
-
+#define MSG(level, format, ...) do {		\
+    if (level < PRINT_MESSAGES) {		\
+      fprintf(stderr, "[%s]$ ",  __FUNCTION__);	\
+      fprintf(stderr, format, __VA_ARGS__);	\
+      fprintf(stderr, "\n");			\
+    }						\
+  } while (0)					\
 
 #include <time.h>
 #define TIME(cmd) do {                                  \
@@ -38,7 +34,32 @@
     cmd;                                                \
     printf("[%s]$ %s took %5.4f ms\n", __FUNCTION__,    \
            #cmd, 1e3*(clock() - start)/CLOCKS_PER_SEC); \
-  } while (0);
+  } while (0)
+
+
+/* assertion macro */
+#include <assert.h>
+#define NOHUP 0 // continue even if an assertion fails
+#define ASSERT_MSG "[assertion:%s]$ %s == %d : %d\n"
+#define ASSERTEQ(E,v)printf(ASSERT_MSG,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
+
+
+/* ----------------------------------
+ * Hash functions available in uthash
+ * ----------------------------------
+ * JEN Jenkins (default)
+ * BER Bernstein
+ * SAX Shift-Add-Xor
+ * OAT One-at-a-time
+ * FNV Fowler/Noll/Vo
+ * SFH Paul Hsieh
+ * MUR MurmurHash v3 (see note)
+ */
+#define HASH_FUNCTION HASH_SAX
+#include "uthash.h"
+
+/* tpl file format header */
+#include "tpl.h"
 
 
 #define RABBIT_ANY      (1 << 0)
@@ -80,7 +101,13 @@ void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
 
-#define tree_size_below(m, n) ((1 << (3*((n)+1)) - 1) / ((m) - 1))
+/*
+ * Return the size of a tree of max depth depth n and branching ratio m=2^r
+ * tree_size_atlevel = (m^(n+1) - 1) / (m - 1)
+ */
+#define tree_size_atlevel(r, n) ((1 << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
+
+
 
 
 struct rabbit_mesh {
@@ -274,23 +301,22 @@ void rabbit_mesh_build(rabbit_mesh *M)
 	HASH_FIND(hh, M->edges, vertices, 6 * sizeof(int), existing_edge);
 
 
-        if (existing_edge == NULL) {
+        if (existing_edge != NULL) continue;
 
-          int v0 = start[a][n];
-          int v1 = start[a][n] + jumps[a];
+	int v0 = start[a][n];
+	int v1 = start[a][n] + jumps[a];
 
-          edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
-          edge->data = (double*) calloc(M->config.doubles_per_edge, sizeof(double));
+	edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+	edge->data = (double*) calloc(M->config.doubles_per_edge, sizeof(double));
 
-          for (ai=0; ai<3; ++ai) {
-            edge->vertices[ai+0] = vertices[v0][a];
-            edge->vertices[ai+3] = vertices[v1][a];
-          }
+	for (ai=0; ai<3; ++ai) {
+	  edge->vertices[ai+0] = vertices[v0][a];
+	  edge->vertices[ai+3] = vertices[v1][a];
+	}
 
-          HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
-          MSG(2, "adding edge %d", HASH_CNT(hh, M->edges));
+	HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+	MSG(2, "adding edge %d", HASH_CNT(hh, M->edges));
 
-        }
       }
     }
   }
@@ -318,14 +344,72 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   tpl_free(tn);
 }
 
+int edge_contiguous_compare(rabbit_edge *ea, rabbit_edge *eb)
+{
+  int n, len_a, len_b, axis_a, axis_b, depth_a=0, depth_b=0;
+  int ax0, ax1, ax2;
+
+  for (n=0; n<3; ++n) {
+
+    len_a = ea->vertices[n+3] - ea->vertices[n];
+    len_b = eb->vertices[n+3] - eb->vertices[n];
+
+    if (len_a != 0) {
+      axis_a = n;
+      while (len_a >>= 1) ++depth_a;
+    }
+
+    if (len_b != 0) {
+      axis_b = n;
+      while (len_b >>= 1) ++depth_b;
+    }
+  }
+
+  ax0 = axis_a;
+  ax1 = (ax0 + 1) % 3; // only used if axis_a == axis_b
+  ax2 = (ax0 + 2) % 3;
+
+  /* orientation (x, y, z) - directed */
+  if (axis_a != axis_b) {
+    return axis_b - axis_a;
+  }
+
+  /* coordinate of next axis */
+  if (ea->vertices[ax1] != eb->vertices[ax1]) {
+    return eb->vertices[ax1] - ea->vertices[ax1];
+  }
+
+  /* coordinate of next axis */
+  if (ea->vertices[ax2] != eb->vertices[ax2]) {
+    return eb->vertices[ax2] - ea->vertices[ax2];
+  }
+
+  /* left endpoint of segment along its own axis */
+  if (ea->vertices[ax0] != eb->vertices[ax0]) {
+    return eb->vertices[ax0] - ea->vertices[ax0];
+  }
+
+  /* depth of segment */
+  if (depth_a != depth_b) {
+    return depth_b - depth_a;
+  }
+
+  return 0;
+}
+
 int node_preorder_compare(rabbit_node *a, rabbit_node *b)
 {
   return node_preorder_label(a) - node_preorder_label(b);
 }
 
 uint64_t node_preorder_label(rabbit_node *node)
+/*
+ * Return the order in which a given node is visited in a preorder traversal of
+ * a fully fleshed out tree having arbitrary max_depth and branching ratio m=8
+ */
 {
-  int m = 8; // branching ratio
+  int r = 3;
+  int m = 1 << r; // branching ratio
   int d, n, h, nb, sd, Md, adding, label=0;
   uint64_t index = interleave_bits3(node->index[1],
                                     node->index[2],
@@ -337,7 +421,7 @@ uint64_t node_preorder_label(rabbit_node *node)
     h = node->mesh->config.max_depth - d - 1;
     nb = 1 << (3*n);
     sd = (index / nb) % m;
-    Md = tree_size_below(m, h);
+    Md = tree_size_atlevel(r, h);
     adding = sd * Md + 1;
     label += adding;
 
@@ -365,15 +449,34 @@ uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
   return label;
 }
 
+static void sanity_tests()
+{
+  /* 1d trees, m=2 */
+  ASSERTEQ(tree_size_atlevel(1, 0), 1);
+  ASSERTEQ(tree_size_atlevel(1, 1), 3);
+  ASSERTEQ(tree_size_atlevel(1, 2), 7);
+
+  /* 2d trees, m=4 */
+  ASSERTEQ(tree_size_atlevel(2, 0), 1);
+  ASSERTEQ(tree_size_atlevel(2, 1), 5);
+  ASSERTEQ(tree_size_atlevel(2, 2), 21);
+
+  /* 3d trees, m=8 */
+  ASSERTEQ(tree_size_atlevel(3, 0), 1);
+  ASSERTEQ(tree_size_atlevel(3, 1), 9);
+  ASSERTEQ(tree_size_atlevel(3, 2), 73);
+}
 
 int main()
 {
+  sanity_tests();
+
   rabbit_cfg config = { 10, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 5;
+  int D = 4;
 
   for (i=0; i<(1<<D); ++i) {
     for (j=0; j<(1<<D); ++j) {
@@ -388,11 +491,15 @@ int main()
   }
 
   TIME(
+       rabbit_mesh_build(mesh)
+       );
+
+  TIME(
        HASH_SRT(hh, mesh->nodes, node_preorder_compare)
        );
 
   TIME(
-       rabbit_mesh_build(mesh)
+       HASH_SRT(hh, mesh->edges, edge_contiguous_compare)
        );
 
   MSG(0, "there are %d total nodes",
