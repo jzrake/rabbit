@@ -2,8 +2,23 @@
 #include "uthash.h"
 #include "tpl.h"
 
-#define DEBUG 1
-#define DEBUG_MSG(m) if (DEBUG) { printf("%s %s\n", __FUNCTION__, m); }
+#define ALWAYS 3
+#define SOMETIMES 2
+#define ALMOST_NEVER 1
+#define NEVER 0
+
+/* print messages how often? */
+#define PRINT_MESSAGES ALMOST_NEVER
+
+
+
+#define MSG(level, format, ...) do {		\
+    if (level < PRINT_MESSAGES) {		\
+      fprintf(stderr, "[%s]$ ", __FUNCTION__);  \
+      fprintf(stderr, format, __VA_ARGS__);     \
+    }                                           \
+  } while (0)                                   \
+
 
 #define RABBIT_ANY      (1 << 0)
 #define RABBIT_ACTIVE   (1 << 1)
@@ -81,9 +96,7 @@ void rabbit_mesh_del(rabbit_mesh *M)
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
     HASH_DEL(M->edges, edge);
-
-    printf("removing edge, there are now %d edges\n",
-           HASH_CNT(hh, M->edges));
+    MSG(1, "removing edge %d\n", HASH_CNT(hh, M->edges));
 
     free(edge->data);
     free(edge);
@@ -226,20 +239,19 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
         if (existing_edge == NULL) {
 
-	  int v0 = start[a][n];
-	  int v1 = start[a][n] + jumps[a];
+          int v0 = start[a][n];
+          int v1 = start[a][n] + jumps[a];
 
           edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
           edge->data = (double*) calloc(M->config.doubles_per_edge, sizeof(double));
 
-	  for (ai=0; ai<3; ++ai) {
-	    edge->vertices[ai+0] = vertices[v0][a];
-	    edge->vertices[ai+3] = vertices[v1][a];
-	  }
+          for (ai=0; ai<3; ++ai) {
+            edge->vertices[ai+0] = vertices[v0][a];
+            edge->vertices[ai+3] = vertices[v1][a];
+          }
 
-	  HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
-
-          printf("there are now %d edges\n", HASH_CNT(hh, M->edges));
+          HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+          MSG(1, "adding edge #%d\n", HASH_CNT(hh, M->edges));
 
         }
       }
@@ -277,7 +289,7 @@ int main()
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 0;
+  int D = 4;
 
   for (i=0; i<(1<<D); ++i) {
     for (j=0; j<(1<<D); ++j) {
@@ -293,7 +305,8 @@ int main()
 
   rabbit_mesh_build(mesh);
 
-  printf("there are %d total nodes\n", rabbit_mesh_count(mesh, RABBIT_ANY));
+  MSG(0, "there are %d total nodes\n",
+      rabbit_mesh_count(mesh, RABBIT_ANY));
 
   rabbit_mesh_dump(mesh, "rabbit.mesh");
 
