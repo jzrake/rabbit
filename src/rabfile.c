@@ -1,13 +1,16 @@
-#include <stdio.h>
-#include "uthash.h"
-#include "tpl.h"
+/* -----------------------------------------------------------------------------
+ * FILE:
+ *
+ * AUTHOR: Jonathan Zrake
+ *
+ * DESCRIPTION:
+ *
+ *
+ * -----------------------------------------------------------------------------
+ */
 
-typedef struct
-{
-  int max_depth;
-  int doubles_per_node;
-  int doubles_per_edge;
-} rabbit_cfg;
+#define RABBIT_INTERNAL
+#include "rabbit.h"
 
 
 int main(int argc, char **argv)
@@ -17,25 +20,17 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  int I[4], V[6];
-  rabbit_cfg config_val;
-  double node_data_val;
-  double edge_data_val;
-  tpl_node *tn = tpl_map("S(iii)A(i#A(f))A(i#A(f))",
-			 &config_val,     // 0
-			 I, 4,            // 1
-			 &node_data_val,  // 2
-			 V, 6,            // 3
-			 &edge_data_val); // 4
-
-  tpl_load(tn, TPL_FILE, argv[1]);
-  tpl_unpack(tn, 0);
+  rabbit_mesh *mesh = rabbit_mesh_load(argv[1]);
+  rabbit_cfg config = mesh->config;
 
   printf("rabbit_cfg:\n");
-  printf("  max_depth = %d\n", config_val.max_depth);
-  printf("  doubles_per_node = %d\n", config_val.doubles_per_node);
-  printf("  doubles_per_edge = %d\n", config_val.doubles_per_edge);
+  printf("  max_depth = %d\n", config.max_depth);
+  printf("  doubles_per_node = %d\n", config.doubles_per_node);
+  printf("  doubles_per_edge = %d\n", config.doubles_per_edge);
 
+  rabbit_mesh_del(mesh);
+
+  /*
   while (tpl_unpack(tn, 1) > 0) {
     printf("N %d %d %d %d :", I[0], I[1], I[2], I[3]);
     while (tpl_unpack(tn, 2) > 0) {
@@ -53,5 +48,7 @@ int main(int argc, char **argv)
   }
 
   tpl_free(tn);
+  */
+
   return 0;
 }
