@@ -100,6 +100,8 @@ void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 
 static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
+static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
+static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
 
 /*
  * Return the size of a tree of max depth depth n and branching ratio m=2^r
@@ -248,8 +250,8 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
 
 void rabbit_mesh_build(rabbit_mesh *M)
 {
-  rabbit_node *node, *tmp;
-  rabbit_edge *edge = NULL;
+  rabbit_node *node, *tmp_node;
+  rabbit_edge *edge = NULL, *tmp_edge, *last_edge;
   rabbit_edge *existing_edge = NULL;
 
   int vertices[8][3];
@@ -269,7 +271,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
    */
 
 
-  HASH_ITER(hh, M->nodes, node, tmp) {
+  HASH_ITER(hh, M->nodes, node, tmp_node) {
 
     int n; // starting node counter, [0, 3)
     int a, ai; // axis counter, [0,4)
@@ -320,6 +322,32 @@ void rabbit_mesh_build(rabbit_mesh *M)
       }
     }
   }
+
+  HASH_SRT(hh, M->edges, edge_contiguous_compare);
+
+  last_edge = NULL;
+  edge = NULL;
+
+  int iter = 0;
+  int removed = 0;
+
+  HASH_ITER(hh, M->edges, edge, tmp_edge) {
+
+    MSG(1, "checking edge %d", iter++);
+
+    if (last_edge != NULL) {
+
+      if (edge_contains(last_edge, edge)) {
+
+	//HASH_DEL(M->edges, last_edge);
+	MSG(1, "removing duplicate edge %d", removed++);
+
+	//free(edge->data);
+	//free(edge);
+      }
+    }
+    last_edge = edge;
+  }
 }
 
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
@@ -344,15 +372,15 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   tpl_free(tn);
 }
 
-int edge_contiguous_compare(rabbit_edge *ea, rabbit_edge *eb)
+int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
 {
   int n, len_a, len_b, axis_a, axis_b, depth_a=0, depth_b=0;
   int ax0, ax1, ax2;
 
   for (n=0; n<3; ++n) {
 
-    len_a = ea->vertices[n+3] - ea->vertices[n];
-    len_b = eb->vertices[n+3] - eb->vertices[n];
+    len_a = A->vertices[n+3] - A->vertices[n];
+    len_b = B->vertices[n+3] - B->vertices[n];
 
     if (len_a != 0) {
       axis_a = n;
@@ -375,18 +403,18 @@ int edge_contiguous_compare(rabbit_edge *ea, rabbit_edge *eb)
   }
 
   /* coordinate of next axis */
-  if (ea->vertices[ax1] != eb->vertices[ax1]) {
-    return eb->vertices[ax1] - ea->vertices[ax1];
+  if (A->vertices[ax1] != B->vertices[ax1]) {
+    return B->vertices[ax1] - A->vertices[ax1];
   }
 
   /* coordinate of next axis */
-  if (ea->vertices[ax2] != eb->vertices[ax2]) {
-    return eb->vertices[ax2] - ea->vertices[ax2];
+  if (A->vertices[ax2] != B->vertices[ax2]) {
+    return B->vertices[ax2] - A->vertices[ax2];
   }
 
   /* left endpoint of segment along its own axis */
-  if (ea->vertices[ax0] != eb->vertices[ax0]) {
-    return eb->vertices[ax0] - ea->vertices[ax0];
+  if (A->vertices[ax0] != B->vertices[ax0]) {
+    return B->vertices[ax0] - A->vertices[ax0];
   }
 
   /* depth of segment */
@@ -395,6 +423,61 @@ int edge_contiguous_compare(rabbit_edge *ea, rabbit_edge *eb)
   }
 
   return 0;
+}
+
+int edge_contains(rabbit_edge *A, rabbit_edge *B)
+/*
+ * Return true if edge A contains edge B
+ */
+{
+  int n, len_a, len_b, axis_a, axis_b;
+  int ax0, ax1, ax2;
+
+  for (n=0; n<3; ++n) {
+
+    len_a = A->vertices[n+3] - A->vertices[n];
+    len_b = B->vertices[n+3] - B->vertices[n];
+
+    if (len_a != 0) {
+      axis_a = n;
+    }
+
+    if (len_b != 0) {
+      axis_b = n;
+    }
+  }
+
+  ax0 = axis_a;
+  ax1 = (ax0 + 1) % 3; // only used if axis_a == axis_b
+  ax2 = (ax0 + 2) % 3;
+
+  /* different orientation? */
+  if (axis_a != axis_b) {
+    printf("different orientation\n");
+    return 0;
+  }
+
+  /* not co-linear? */
+  if (A->vertices[ax1] != B->vertices[ax1]) {
+    printf("not colinear 1\n");
+    return 0;
+  }
+  if (A->vertices[ax2] != B->vertices[ax2]) {
+    printf("not colinear 2\n");
+    return 0;
+  }
+
+  int contains = (A->vertices[ax0+0] <= B->vertices[ax0+0] &&
+		  A->vertices[ax0+3] >= B->vertices[ax0+3]);
+
+  if (contains) {
+    printf("[%d %d %d] -> [%d %d %d] contains [%d %d %d] -> [%d %d %d]\n",
+	   A->vertices[0], A->vertices[1], A->vertices[2],
+	   A->vertices[3], A->vertices[4], A->vertices[5],
+	   B->vertices[0], B->vertices[1], B->vertices[2],
+	   B->vertices[3], B->vertices[4], B->vertices[5]);
+  }
+  return contains;
 }
 
 int node_preorder_compare(rabbit_node *a, rabbit_node *b)
@@ -471,12 +554,12 @@ int main()
 {
   sanity_tests();
 
-  rabbit_cfg config = { 10, 4, 4 };
+  rabbit_cfg config = { 1, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 4;
+  int D = 0;
 
   for (i=0; i<(1<<D); ++i) {
     for (j=0; j<(1<<D); ++j) {
