@@ -20,13 +20,13 @@
 /* print messages how often? */
 #define PRINT_MESSAGES ALMOST_NEVER
 
-#define MSG(level, format, ...) do {		\
-    if (level < PRINT_MESSAGES) {		\
-      fprintf(stderr, "[%s]$ ",  __FUNCTION__);	\
-      fprintf(stderr, format, __VA_ARGS__);	\
-      fprintf(stderr, "\n");			\
-    }						\
-  } while (0)					\
+#define MSG(level, format, ...) do {            \
+    if (level < PRINT_MESSAGES) {               \
+      fprintf(stderr, "[%s]$ ",  __FUNCTION__); \
+      fprintf(stderr, format, __VA_ARGS__);     \
+      fprintf(stderr, "\n");                    \
+    }                                           \
+  } while (0)                                   \
 
 #include <time.h>
 #define TIME(cmd) do {                                  \
@@ -273,21 +273,37 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    int n; // starting node counter, [0, 3)
-    int a, ai; // axis counter, [0,4)
+    int n; // starting node counter, [0, 4)
+    int a, ai; // axis counter, [0, 3)
     int d = node->index[0]; // depth
-    int f = M->config.max_depth - d + 1; // rational index log2 denominator
-
+    int f = M->config.max_depth - d + 2; // rational index log2 denominator
 
     /* set the index (i,j,k) of each of this node's 8 vertices */
 
-    for (n=0; n<8; ++n) {
-
-      vertices[n][0] = (node->index[1] + (n >> 0)) << f;
-      vertices[n][1] = (node->index[2] + (n >> 1)) << f;
-      vertices[n][2] = (node->index[3] + (n >> 2)) << f;
-
-    }
+    vertices[0][0] = (node->index[1] + 0) << f;
+    vertices[0][1] = (node->index[2] + 0) << f;
+    vertices[0][2] = (node->index[3] + 0) << f;
+    vertices[1][0] = (node->index[1] + 0) << f;
+    vertices[1][1] = (node->index[2] + 0) << f;
+    vertices[1][2] = (node->index[3] + 1) << f;
+    vertices[2][0] = (node->index[1] + 0) << f;
+    vertices[2][1] = (node->index[2] + 1) << f;
+    vertices[2][2] = (node->index[3] + 0) << f;
+    vertices[3][0] = (node->index[1] + 0) << f;
+    vertices[3][1] = (node->index[2] + 1) << f;
+    vertices[3][2] = (node->index[3] + 1) << f;
+    vertices[4][0] = (node->index[1] + 1) << f;
+    vertices[4][1] = (node->index[2] + 0) << f;
+    vertices[4][2] = (node->index[3] + 0) << f;
+    vertices[5][0] = (node->index[1] + 1) << f;
+    vertices[5][1] = (node->index[2] + 0) << f;
+    vertices[5][2] = (node->index[3] + 1) << f;
+    vertices[6][0] = (node->index[1] + 1) << f;
+    vertices[6][1] = (node->index[2] + 1) << f;
+    vertices[6][2] = (node->index[3] + 0) << f;
+    vertices[7][0] = (node->index[1] + 1) << f;
+    vertices[7][1] = (node->index[2] + 1) << f;
+    vertices[7][2] = (node->index[3] + 1) << f;
 
 
     /* loop over 3 axes 'a' */
@@ -299,26 +315,40 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
       for (n=0; n<4; ++n) {
 
+        int v0 = start[a][n];
+        int v1 = start[a][n] + jumps[a];
+        int edge_vertices[6];
 
-	HASH_FIND(hh, M->edges, vertices, 6 * sizeof(int), existing_edge);
+        for (ai=0; ai<3; ++ai) {
+          edge_vertices[ai+0] = vertices[v0][ai];
+          edge_vertices[ai+3] = vertices[v1][ai];
+        }
+
+        HASH_FIND(hh, M->edges, edge_vertices, 6 * sizeof(int), existing_edge);
 
 
-        if (existing_edge != NULL) continue;
+        if (existing_edge != NULL) {
 
-	int v0 = start[a][n];
-	int v1 = start[a][n] + jumps[a];
+          MSG(2, "edge exists : [%d %d %d] -> [%d %d %d]",
+              edge_vertices[0], edge_vertices[1], edge_vertices[2],
+              edge_vertices[3], edge_vertices[4], edge_vertices[5]);
+        }
+        else {
 
-	edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
-	edge->data = (double*) calloc(M->config.doubles_per_edge, sizeof(double));
+          edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+          edge->data = (double*) calloc(M->config.doubles_per_edge,
+                                        sizeof(double));
 
-	for (ai=0; ai<3; ++ai) {
-	  edge->vertices[ai+0] = vertices[v0][a];
-	  edge->vertices[ai+3] = vertices[v1][a];
-	}
+          memcpy(edge->vertices, edge_vertices, 6 * sizeof(int));
 
-	HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
-	MSG(2, "adding edge %d", HASH_CNT(hh, M->edges));
+          HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
 
+          MSG(2, "adding edge %d [%d %d %d] -> [%d %d %d] (v%d -> v%d)",
+              HASH_CNT(hh, M->edges),
+              edge->vertices[0], edge->vertices[1], edge->vertices[2],
+              edge->vertices[3], edge->vertices[4], edge->vertices[5],
+	      v0, v1);
+        }
       }
     }
   }
@@ -331,23 +361,26 @@ void rabbit_mesh_build(rabbit_mesh *M)
   int iter = 0;
   int removed = 0;
 
+
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
-    MSG(1, "checking edge %d", iter++);
+    MSG(2, "checking edge %d", iter++);
 
     if (last_edge != NULL) {
 
       if (edge_contains(last_edge, edge)) {
 
-	//HASH_DEL(M->edges, last_edge);
-	MSG(1, "removing duplicate edge %d", removed++);
+        HASH_DEL(M->edges, last_edge);
 
-	//free(edge->data);
-	//free(edge);
+        MSG(2, "removing duplicate edge %d", removed++);
+
+        free(edge->data);
+        free(edge);
       }
     }
     last_edge = edge;
   }
+
 }
 
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
@@ -453,31 +486,19 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
 
   /* different orientation? */
   if (axis_a != axis_b) {
-    printf("different orientation\n");
     return 0;
   }
 
   /* not co-linear? */
   if (A->vertices[ax1] != B->vertices[ax1]) {
-    printf("not colinear 1\n");
     return 0;
   }
   if (A->vertices[ax2] != B->vertices[ax2]) {
-    printf("not colinear 2\n");
     return 0;
   }
 
-  int contains = (A->vertices[ax0+0] <= B->vertices[ax0+0] &&
-		  A->vertices[ax0+3] >= B->vertices[ax0+3]);
-
-  if (contains) {
-    printf("[%d %d %d] -> [%d %d %d] contains [%d %d %d] -> [%d %d %d]\n",
-	   A->vertices[0], A->vertices[1], A->vertices[2],
-	   A->vertices[3], A->vertices[4], A->vertices[5],
-	   B->vertices[0], B->vertices[1], B->vertices[2],
-	   B->vertices[3], B->vertices[4], B->vertices[5]);
-  }
-  return contains;
+  return (A->vertices[ax0+0] <= B->vertices[ax0+0] &&
+          A->vertices[ax0+3] >= B->vertices[ax0+3]);
 }
 
 int node_preorder_compare(rabbit_node *a, rabbit_node *b)
@@ -554,12 +575,12 @@ int main()
 {
   sanity_tests();
 
-  rabbit_cfg config = { 1, 4, 4 };
+  rabbit_cfg config = { 10, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 0;
+  int D = 5;
 
   for (i=0; i<(1<<D); ++i) {
     for (j=0; j<(1<<D); ++j) {
