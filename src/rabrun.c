@@ -388,19 +388,33 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 {
-  int n, I[4];
-  double data_val;
-  rabbit_node *node, *tmp;
-  tpl_node *tn = tpl_map("A(i#A(f))", &I, 4, &data_val);
+  int n;
+  int I[4], V[6];
+  double node_data_val;
+  double edge_data_val;
+  rabbit_node *node, *tmp_node;
+  rabbit_edge *edge, *tmp_edge;
+  tpl_node *tn = tpl_map("A(i#A(f))A(i#A(f))",
+			 I, 4,            // 1
+			 &node_data_val,  // 2
+			 V, 6,            // 3
+			 &edge_data_val); // 4
 
-  HASH_ITER(hh, M->nodes, node, tmp) {
-
+  HASH_ITER(hh, M->nodes, node, tmp_node) {
     memcpy(I, node->index, 4 * sizeof(int));
     tpl_pack(tn, 1);
-
     for (n=0; n<M->config.doubles_per_node; ++n) {
-      data_val = node->data[n];
+      node_data_val = node->data[n];
       tpl_pack(tn, 2);
+    }
+  }
+
+  HASH_ITER(hh, M->edges, edge, tmp_edge) {
+    memcpy(V, edge->vertices, 6 * sizeof(int));
+    tpl_pack(tn, 3);
+    for (n=0; n<M->config.doubles_per_edge; ++n) {
+      edge_data_val = edge->data[n];
+      tpl_pack(tn, 4);
     }
   }
 
@@ -602,6 +616,10 @@ int main()
         I[2] = j;
         I[3] = k;
         node = rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+	node->data[0] = 0.0;
+	node->data[1] = 0.1;
+	node->data[2] = 0.2;
+	node->data[3] = 0.3;
       }
     }
   }
