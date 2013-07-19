@@ -90,6 +90,7 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
 void         rabbit_mesh_build(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
+rabbit_mesh *rabbit_mesh_load(char *fname);
 
 
 /*
@@ -370,11 +371,9 @@ void rabbit_mesh_build(rabbit_mesh *M)
     MSG(2, "checking edge %d", iter++);
 
     if (last_edge != NULL) {
-
       if (edge_contains(last_edge, edge)) {
 
         HASH_DEL(M->edges, last_edge);
-
         MSG(2, "removing duplicate edge %d", removed++);
 
         free(edge->data);
@@ -383,22 +382,26 @@ void rabbit_mesh_build(rabbit_mesh *M)
     }
     last_edge = edge;
   }
-
 }
 
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 {
   int n;
   int I[4], V[6];
+  rabbit_cfg config_val;
   double node_data_val;
   double edge_data_val;
   rabbit_node *node, *tmp_node;
   rabbit_edge *edge, *tmp_edge;
-  tpl_node *tn = tpl_map("A(i#A(f))A(i#A(f))",
+  tpl_node *tn = tpl_map("S(iii)A(i#A(f))A(i#A(f))",
+			 &config_val,     // 0
 			 I, 4,            // 1
 			 &node_data_val,  // 2
 			 V, 6,            // 3
 			 &edge_data_val); // 4
+
+  config_val = M->config;
+  tpl_pack(tn, 0);
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
     memcpy(I, node->index, 4 * sizeof(int));
@@ -420,6 +423,51 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 
   tpl_dump(tn, TPL_FILE, fname);
   tpl_free(tn);
+}
+
+rabbit_mesh *rabbit_mesh_load(char *fname)
+{
+  rabbit_mesh *M;
+
+  int n;
+  int I[4], V[6];
+  rabbit_cfg config_val;
+  double node_data_val;
+  double edge_data_val;
+  rabbit_node *node;
+  rabbit_edge *edge;
+  tpl_node *tn = tpl_map("S(iii)A(i#A(f))A(i#A(f))",
+			 &config_val,     // 0
+			 I, 4,            // 1
+			 &node_data_val,  // 2
+			 V, 6,            // 3
+			 &edge_data_val); // 4
+
+  tpl_load(tn, TPL_FILE, fname);
+  tpl_unpack(tn, 0);
+
+  M = rabbit_mesh_new(config_val);
+
+  while (tpl_unpack(tn, 1) > 0) {
+    node = rabbit_mesh_putnode(M, I, RABBIT_ACTIVE);
+    for (n=0; n<M->config.doubles_per_node; ++n) {
+      node->data[n] = tpl_unpack(tn, 2);
+    }
+  }
+
+  while (tpl_unpack(tn, 3) > 0) {
+    edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+    edge->data = (double*) calloc(M->config.doubles_per_edge,
+				  sizeof(double));
+    memcpy(edge->vertices, V, 6 * sizeof(int));
+    for (n=0; n<M->config.doubles_per_edge; ++n) {
+      edge->data[n] = tpl_unpack(tn, 4);
+    }
+    HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+  }
+
+  tpl_free(tn);
+  return M;
 }
 
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
@@ -588,13 +636,25 @@ static void sanity_tests()
   ASSERTEQ(tree_size_atlevel(3, 2), 73);
 
   /* does a cube have 12 edges? */
-  rabbit_cfg config = { 10, 4, 4 };
-  rabbit_mesh *mesh = rabbit_mesh_new(config);
-  int I[4] = { 0, 0, 0, 0 };
-  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
-  rabbit_mesh_build(mesh);
-  ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
-  rabbit_mesh_del(mesh);
+  if (1) {
+    rabbit_cfg config = { 10, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
+    int I[4] = { 0, 0, 0, 0 };
+    rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+    rabbit_mesh_build(mesh);
+    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+    rabbit_mesh_dump(mesh, "rabbit-test.mesh");
+    rabbit_mesh_del(mesh);
+  }
+  if (1) {
+    rabbit_mesh *mesh = rabbit_mesh_load("rabbit-test.mesh");
+    ASSERTEQ(mesh->config.max_depth, 10);
+    ASSERTEQ(mesh->config.doubles_per_node, 4);
+    ASSERTEQ(mesh->config.doubles_per_edge, 4);
+    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_ACTIVE), 1);
+    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+    rabbit_mesh_del(mesh);
+  }
 }
 
 int main()
@@ -636,7 +696,7 @@ int main()
        HASH_SRT(hh, mesh->edges, edge_contiguous_compare)
        );
 
-  MSG(0, "there are %d total nodes", rabbit_mesh_count(mesh, RABBIT_ANY));
+  MSG(0, "there are %d total nodes", rabbit_mesh_count(mesh, RABBIT_ACTIVE));
   MSG(0, "there are %d total edges", rabbit_mesh_count(mesh, RABBIT_EDGE));
 
   rabbit_mesh_dump(mesh, "rabbit.mesh");
