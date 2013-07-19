@@ -66,7 +66,7 @@
 #define RABBIT_ACTIVE   (1 << 1)
 #define RABBIT_GHOST    (1 << 2)
 #define RABBIT_FORCE    (1 << 3)
-
+#define RABBIT_EDGE     (1 << 4)
 
 
 typedef struct rabbit_mesh rabbit_mesh;
@@ -238,6 +238,9 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
   if (flags & RABBIT_ANY) {
     return HASH_CNT(hh, M->nodes);
   }
+  else if (flags & RABBIT_EDGE) {
+    return HASH_CNT(hh, M->edges);
+  }
   else {
     HASH_ITER(hh, M->nodes, node, tmp) {
       if (node->flags & flags) {
@@ -276,7 +279,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
     int n; // starting node counter, [0, 4)
     int a, ai; // axis counter, [0, 3)
     int d = node->index[0]; // depth
-    int f = M->config.max_depth - d + 2; // rational index log2 denominator
+    int f = M->config.max_depth - d + 1; // rational index log2 denominator
 
     /* set the index (i,j,k) of each of this node's 8 vertices */
 
@@ -347,7 +350,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
               HASH_CNT(hh, M->edges),
               edge->vertices[0], edge->vertices[1], edge->vertices[2],
               edge->vertices[3], edge->vertices[4], edge->vertices[5],
-	      v0, v1);
+              v0, v1);
         }
       }
     }
@@ -569,6 +572,15 @@ static void sanity_tests()
   ASSERTEQ(tree_size_atlevel(3, 0), 1);
   ASSERTEQ(tree_size_atlevel(3, 1), 9);
   ASSERTEQ(tree_size_atlevel(3, 2), 73);
+
+  /* does a cube have 12 edges? */
+  rabbit_cfg config = { 10, 4, 4 };
+  rabbit_mesh *mesh = rabbit_mesh_new(config);
+  int I[4] = { 0, 0, 0, 0 };
+  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+  rabbit_mesh_build(mesh);
+  ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+  rabbit_mesh_del(mesh);
 }
 
 int main()
@@ -606,8 +618,8 @@ int main()
        HASH_SRT(hh, mesh->edges, edge_contiguous_compare)
        );
 
-  MSG(0, "there are %d total nodes",
-      rabbit_mesh_count(mesh, RABBIT_ANY));
+  MSG(0, "there are %d total nodes", rabbit_mesh_count(mesh, RABBIT_ANY));
+  MSG(0, "there are %d total edges", rabbit_mesh_count(mesh, RABBIT_EDGE));
 
   rabbit_mesh_dump(mesh, "rabbit.mesh");
 
