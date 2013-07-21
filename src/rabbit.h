@@ -4,11 +4,13 @@
 /* ------------------------------------------------------------------
  * RABBIT PUBLIC API
  * --------------------------------------------------------------- */
-#define RABBIT_ANY      (1 << 0)
-#define RABBIT_ACTIVE   (1 << 1)
-#define RABBIT_GHOST    (1 << 2)
-#define RABBIT_FORCE    (1 << 3)
-#define RABBIT_EDGE     (1 << 4)
+#define RABBIT_SUCCESS  0
+#define RABBIT_FAIL     (1 << 0)
+#define RABBIT_ANY      (1 << 1)
+#define RABBIT_ACTIVE   (1 << 2)
+#define RABBIT_GHOST    (1 << 3)
+#define RABBIT_FORCE    (1 << 4)
+#define RABBIT_EDGE     (1 << 5)
 
 
 typedef struct rabbit_mesh rabbit_mesh; // opaque
@@ -30,6 +32,7 @@ rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int index[4]);
 rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int index[4]);
 rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
+int          rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N);
 void         rabbit_mesh_build(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 rabbit_mesh *rabbit_mesh_load(char *fname);
@@ -52,11 +55,17 @@ rabbit_mesh *rabbit_mesh_load(char *fname);
 #include <stdio.h>
 #define MSG(level, format, ...) do {            \
     if (level < PRINT_MESSAGES) {               \
-      fprintf(stderr, "[%s]$ ",  __FUNCTION__); \
-      fprintf(stderr, format, __VA_ARGS__);     \
-      fprintf(stderr, "\n");                    \
+      fprintf(stdout, "[%s]$ ",  __FUNCTION__); \
+      fprintf(stdout, format, __VA_ARGS__);     \
+      fprintf(stdout, "\n");                    \
     }                                           \
   } while (0)                                   \
+
+#define ERR(format, ...) do {				\
+    fprintf(stderr, "[ERROR:%s]$ ",  __FUNCTION__);	\
+    fprintf(stderr, format, __VA_ARGS__);		\
+    fprintf(stderr, "\n");				\
+  } while (0)						\
 
 #include <time.h>
 #define TIME(cmd) do {                                  \
@@ -70,10 +79,10 @@ rabbit_mesh *rabbit_mesh_load(char *fname);
 /* assertion macro */
 #include <assert.h>
 #define NOHUP 0 // continue even if an assertion fails
-#define ASSERT_I "[assertion:%s]$ %s == %d : %d\n"
-#define ASSERT_F "[assertion:%s]$ %s == %f : %f\n"
-#define ASSERTEQ(E,v) printf(ASSERT_I,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
-#define ASSERTEQF(E,v)printf(ASSERT_F,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
+#define ASSERT_I "[assertion:%s]$ %s == %s : %d\n"
+#define ASSERT_F "[assertion:%s]$ %s == %s : %f\n"
+#define ASSERTEQ(E,v) printf(ASSERT_I,__FUNCTION__,#E,#v,E);assert(E==v||NOHUP);
+#define ASSERTEQF(E,v)printf(ASSERT_F,__FUNCTION__,#E,#v,E);assert(E==v||NOHUP);
 
 
 /* ----------------------------------

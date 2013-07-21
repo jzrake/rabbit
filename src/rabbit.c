@@ -143,6 +143,41 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
   }
 }
 
+int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
+/*
+ * Merge mesh N into mesh M, preferring M on collisions. The merge only proceeds
+ * if both meshes have identical config structs. Nodes, faces, and edges from N
+ * are *moved* from N to M unless they already exist in M, in which case the
+ * object at M is kept, and N retains ownership of it. N still needs to be freed
+ * by the caller.
+ */
+{
+  rabbit_node *node, *tmp_node, *rpl_node;
+  rabbit_edge *edge, *tmp_edge, *rpl_edge;
+
+  if (memcmp(&M->config, &N->config, sizeof(rabbit_cfg)) != 0) {
+    ERR("%s", "cannot merge meshes with different config structs");
+    return RABBIT_FAIL;
+  }
+
+  HASH_ITER(hh, N->nodes, node, tmp_node) {
+    HASH_FIND(hh, M->nodes, node->index, 4 * sizeof(int), rpl_node);
+    if (rpl_node == NULL) {
+      HASH_DEL(N->nodes, node);
+      HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
+    }
+  }
+
+  HASH_ITER(hh, N->edges, edge, tmp_edge) {
+    HASH_FIND(hh, M->edges, edge->vertices, 6 * sizeof(int), rpl_edge);
+    if (rpl_edge == NULL) {
+      HASH_DEL(N->edges, edge);
+      HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+    }
+  }
+  return RABBIT_SUCCESS;
+}
+
 void rabbit_mesh_build(rabbit_mesh *M)
 {
   rabbit_node *node, *tmp_node;
@@ -570,6 +605,32 @@ static void sanity_tests()
     ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_ACTIVE), 1);
     ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
     rabbit_mesh_del(mesh);
+  }
+  if (1) {
+    int merge_error;
+    int I0[4] = { 1, 0, 0, 0 };
+    int I1[4] = { 1, 1, 0, 0 };
+    rabbit_cfg config0 = { 10, 4, 4 };
+    rabbit_cfg config1 = { 11, 4, 4 };
+    rabbit_mesh *mesh0 = rabbit_mesh_new(config0);
+    rabbit_mesh *mesh1 = rabbit_mesh_new(config1);
+    rabbit_mesh_putnode(mesh0, I0, RABBIT_ACTIVE);
+    rabbit_mesh_putnode(mesh1, I1, RABBIT_ACTIVE);
+    rabbit_mesh_build(mesh0);
+    rabbit_mesh_build(mesh1);
+    merge_error = rabbit_mesh_merge(mesh0, mesh1);
+    ASSERTEQ(merge_error, RABBIT_FAIL);
+    config1.max_depth = 10;
+    rabbit_mesh_del(mesh1);
+    mesh1 = rabbit_mesh_new(config1);
+    rabbit_mesh_putnode(mesh1, I1, RABBIT_ACTIVE);
+    rabbit_mesh_build(mesh1);
+    merge_error = rabbit_mesh_merge(mesh0, mesh1);
+    ASSERTEQ(merge_error, RABBIT_SUCCESS);
+    ASSERTEQ(rabbit_mesh_count(mesh1, RABBIT_ACTIVE), 0); // 0 overlapping nodes
+    ASSERTEQ(rabbit_mesh_count(mesh1, RABBIT_EDGE), 4);   // 4 overlapping edges
+    rabbit_mesh_del(mesh0);
+    rabbit_mesh_del(mesh1);
   }
 }
 
