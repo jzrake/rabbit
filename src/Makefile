@@ -11,6 +11,9 @@ rabfile : rabfile.o rabbit.o tpl.o
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+rabrun.o : rabbit.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 rabbit.o : rabbit.c
 	$(CC) $(CFLAGS) -c -o $@ $< -DRABBIT_LIB
 

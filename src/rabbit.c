@@ -296,20 +296,26 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
     memcpy(I, node->index, 4 * sizeof(int));
+
     tpl_pack(tn, 1);
+
     for (n=0; n<M->config.doubles_per_node; ++n) {
       node_data_val = node->data[n];
       tpl_pack(tn, 2);
     }
+    tpl_pack(tn, 1); // pack data array
   }
 
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
     memcpy(V, edge->vertices, 6 * sizeof(int));
+
     tpl_pack(tn, 3);
+
     for (n=0; n<M->config.doubles_per_edge; ++n) {
       edge_data_val = edge->data[n];
       tpl_pack(tn, 4);
     }
+    tpl_pack(tn, 3); // pack data array
   }
 
   tpl_dump(tn, TPL_FILE, fname);
@@ -341,8 +347,12 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
 
   while (tpl_unpack(tn, 1) > 0) {
     node = rabbit_mesh_putnode(M, I, RABBIT_ACTIVE);
+
+    tpl_unpack(tn, 1); // unpack data array
+
     for (n=0; n<M->config.doubles_per_node; ++n) {
-      node->data[n] = tpl_unpack(tn, 2);
+      tpl_unpack(tn, 2);
+      node->data[n] = node_data_val;
     }
   }
 
@@ -351,8 +361,12 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
     edge->data = (double*) calloc(M->config.doubles_per_edge,
 				  sizeof(double));
     memcpy(edge->vertices, V, 6 * sizeof(int));
+
+    tpl_unpack(tn, 3); // unpack data array
+
     for (n=0; n<M->config.doubles_per_edge; ++n) {
-      edge->data[n] = tpl_unpack(tn, 4);
+      tpl_unpack(tn, 4);
+      edge->data[n] = edge_data_val;
     }
     HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
   }
@@ -529,17 +543,27 @@ static void sanity_tests()
 
   /* does a cube have 12 edges? */
   if (1) {
+    int I[4] = { 0, 0, 0, 0 };
     rabbit_cfg config = { 10, 4, 4 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
-    int I[4] = { 0, 0, 0, 0 };
-    rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+    rabbit_node *node = rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+    node->data[0] = 10.0;
+    node->data[1] = 20.0;
+    node->data[2] = 30.0;
+    node->data[3] = 40.0;
     rabbit_mesh_build(mesh);
     ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
     rabbit_mesh_dump(mesh, "rabbit-test.mesh");
     rabbit_mesh_del(mesh);
   }
   if (1) {
+    int I[4] = { 0, 0, 0, 0 };
     rabbit_mesh *mesh = rabbit_mesh_load("rabbit-test.mesh");
+    rabbit_node *node = rabbit_mesh_getnode(mesh, I);
+    ASSERTEQF(node->data[0], 10.0);
+    ASSERTEQF(node->data[1], 20.0);
+    ASSERTEQF(node->data[2], 30.0);
+    ASSERTEQF(node->data[3], 40.0);
     ASSERTEQ(mesh->config.max_depth, 10);
     ASSERTEQ(mesh->config.doubles_per_node, 4);
     ASSERTEQ(mesh->config.doubles_per_edge, 4);

@@ -70,8 +70,10 @@ rabbit_mesh *rabbit_mesh_load(char *fname);
 /* assertion macro */
 #include <assert.h>
 #define NOHUP 0 // continue even if an assertion fails
-#define ASSERT_MSG "[assertion:%s]$ %s == %d : %d\n"
-#define ASSERTEQ(E,v)printf(ASSERT_MSG,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
+#define ASSERT_I "[assertion:%s]$ %s == %d : %d\n"
+#define ASSERT_F "[assertion:%s]$ %s == %f : %f\n"
+#define ASSERTEQ(E,v) printf(ASSERT_I,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
+#define ASSERTEQF(E,v)printf(ASSERT_F,__FUNCTION__,#E,v,E);assert(E==v||NOHUP);
 
 
 /* ----------------------------------
