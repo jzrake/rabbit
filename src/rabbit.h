@@ -21,6 +21,7 @@ typedef struct // fully defined
 {
   int max_depth;
   int doubles_per_node;
+  int doubles_per_face;
   int doubles_per_edge;
 } rabbit_cfg;
 
@@ -108,6 +109,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname);
 struct rabbit_mesh {
   rabbit_cfg config;
   rabbit_node *nodes;
+  rabbit_face *faces;
   rabbit_edge *edges;
 } ;
 
@@ -120,7 +122,9 @@ struct rabbit_node {
 } ;
 
 struct rabbit_face {
-  rabbit_node nodes[2];
+  int index[3];
+  double *data;
+  UT_hash_handle hh;
 } ;
 
 struct rabbit_edge {

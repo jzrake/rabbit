@@ -34,6 +34,7 @@ rabbit_mesh *rabbit_mesh_new(rabbit_cfg cfg)
   rabbit_mesh *M = (rabbit_mesh*) malloc(sizeof(rabbit_mesh));
   M->config = cfg;
   M->nodes = NULL;
+  M->faces = NULL;
   M->edges = NULL;
   return M;
 }
@@ -41,19 +42,27 @@ rabbit_mesh *rabbit_mesh_new(rabbit_cfg cfg)
 void rabbit_mesh_del(rabbit_mesh *M)
 {
   rabbit_node *node, *tmp_node;
+  rabbit_face *face, *tmp_face;
   rabbit_edge *edge, *tmp_edge;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
-    rabbit_mesh_delnode(M, node->index);
+    HASH_DEL(M->nodes, node);
+    free(node->data);
+    free(node);
   }
+
+  HASH_ITER(hh, M->faces, face, tmp_face) {
+    HASH_DEL(M->faces, face);
+    free(face->data);
+    free(face);
+  }
+
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
-
     HASH_DEL(M->edges, edge);
-    MSG(2, "%s", "removing edge");
-
     free(edge->data);
     free(edge);
   }
+
   free(M);
 }
 
@@ -182,9 +191,30 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
 
 void rabbit_mesh_build(rabbit_mesh *M)
 {
-  rabbit_node *node, *tmp_node;
+  rabbit_node *node, *tmp_node, *neighbor;
   rabbit_edge *edge = NULL, *tmp_edge, *last_edge;
   rabbit_edge *existing_edge = NULL;
+  rabbit_face *face;
+
+  int neighbor_index[4];
+
+  HASH_ITER(hh, M->nodes, node, tmp_node) {
+
+    neighbor_index[0] = node->index[0];
+    neighbor_index[1] = node->index[1] + 1;
+    neighbor_index[2] = node->index[2] + 0;
+    neighbor_index[3] = node->index[3] + 0;
+
+    neighbor = rabbit_mesh_containing(M, neighbor_index);
+
+    if (neighbor) {
+      face = (rabbit_face*) malloc(sizeof(rabbit_face));
+      face->data = calloc(M->config.doubles_per_face, sizeof(double));
+      HASH_ADD(hh, M->faces, data, sizeof(void*), face);
+    }
+  }
+
+
 
   int vertices[8][3];
   int start[3][4] = {{0, 2, 4, 6},
@@ -320,7 +350,7 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   double edge_data_val;
   rabbit_node *node, *tmp_node;
   rabbit_edge *edge, *tmp_edge;
-  tpl_node *tn = tpl_map("S(iii)A(i#A(f))A(i#A(f))",
+  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
 			 &config_val,     // 0
 			 I, 4,            // 1
 			 &node_data_val,  // 2
@@ -369,7 +399,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   double edge_data_val;
   rabbit_node *node;
   rabbit_edge *edge;
-  tpl_node *tn = tpl_map("S(iii)A(i#A(f))A(i#A(f))",
+  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
 			 &config_val,     // 0
 			 I, 4,            // 1
 			 &node_data_val,  // 2
@@ -580,7 +610,7 @@ static void sanity_tests()
   /* does a cube have 12 edges? */
   if (1) {
     int I[4] = { 0, 0, 0, 0 };
-    rabbit_cfg config = { 10, 4, 4 };
+    rabbit_cfg config = { 10, 4, 4, 4 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
     rabbit_node *node = rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
     node->data[0] = 10.0;
@@ -611,8 +641,8 @@ static void sanity_tests()
     int merge_error;
     int I0[4] = { 1, 0, 0, 0 };
     int I1[4] = { 1, 1, 0, 0 };
-    rabbit_cfg config0 = { 10, 4, 4 };
-    rabbit_cfg config1 = { 11, 4, 4 };
+    rabbit_cfg config0 = { 10, 4, 4, 4 };
+    rabbit_cfg config1 = { 11, 4, 4, 4 };
     rabbit_mesh *mesh0 = rabbit_mesh_new(config0);
     rabbit_mesh *mesh1 = rabbit_mesh_new(config1);
     rabbit_mesh_putnode(mesh0, I0, RABBIT_ACTIVE);
@@ -639,7 +669,7 @@ int main()
 {
   sanity_tests();
 
-  rabbit_cfg config = { 10, 4, 4 };
+  rabbit_cfg config = { 10, 4, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
