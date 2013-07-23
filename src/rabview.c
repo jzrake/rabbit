@@ -10,14 +10,27 @@ static void GLUTReshapeFunc(int width, int height);
 static void GLUTKeyboardFunc(unsigned char key, int x, int y);
 static void GLUTSpecialFunc(int key, int x, int y);
 
-static double TranslateZ = -3.0;
+static double TranslateZ = -4.0;
 static double RotationX = 0.0;
 static double RotationY = 0.0;
 static double RotationZ = 0.0;
 
+#define RABBIT_INTERNAL
+#include "rabbit.h"
+static rabbit_mesh *Mesh;
+
 
 int main(int argc, char **argv)
 {
+
+  if (argc == 1) {
+    printf("usage: rabiew infile.mesh\n");
+    return 0;
+  }
+  else {
+    Mesh = rabbit_mesh_load(argv[1]);
+  }
+
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
   glutInitWindowSize(768, 768);
@@ -42,7 +55,7 @@ void GLUTDisplayFunc()
 
   /* reset and configure camera */
   glLoadIdentity();
-  glTranslated(0.0,-1.0, 0.0);
+
   glTranslated(0.0, 0.0, TranslateZ);
   glRotated(RotationX, 1.0, 0.0, 0.0);
   glRotated(RotationY, 0.0, 1.0, 0.0);
@@ -51,7 +64,26 @@ void GLUTDisplayFunc()
 
   /* actually draw stuff */
   glEnable(GL_DEPTH_TEST);
-  glutWireTeapot(1.0);
+
+  if (1) {
+    double C = (double) (1 << (1 + Mesh->config.max_depth));
+    rabbit_edge *edge, *tmp_edge;
+    glBegin(GL_LINES);
+
+    HASH_ITER(hh, Mesh->edges, edge, tmp_edge) {
+
+      double x0 = edge->vertices[0] / C - 0.5;
+      double y0 = edge->vertices[1] / C - 0.5;
+      double z0 = edge->vertices[2] / C - 0.5;
+      double x1 = edge->vertices[3] / C - 0.5;
+      double y1 = edge->vertices[4] / C - 0.5;
+      double z1 = edge->vertices[5] / C - 0.5;
+
+      glVertex3d(x0, y0, z0);
+      glVertex3d(x1, y1, z1);
+    }
+    glEnd();
+  }
 
   /* end drawing */
   glutSwapBuffers();
@@ -70,7 +102,7 @@ void GLUTReshapeFunc(int width, int height)
   glViewport(0, 0, width, height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.1f, 100.0f);
+  gluPerspective(45.0f, (GLfloat)width/(GLfloat)height, 0.1f, 1000.0f);
   glMatrixMode(GL_MODELVIEW);
 }
 
@@ -87,8 +119,8 @@ void GLUTSpecialFunc(int key, int x, int y)
 {
   double a = 4.0;
   switch (key) {
-  case GLUT_KEY_RIGHT: RotationZ -= a; break;
-  case GLUT_KEY_LEFT:  RotationZ += a; break;
+  case GLUT_KEY_RIGHT: RotationY -= a; break;
+  case GLUT_KEY_LEFT:  RotationY += a; break;
   case GLUT_KEY_UP:    RotationX -= a; break;
   case GLUT_KEY_DOWN:  RotationX += a; break;
   }

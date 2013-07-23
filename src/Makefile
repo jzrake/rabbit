@@ -12,7 +12,7 @@ rabrun : rabrun.o tpl.o
 rabfile : rabfile.o rabbit.o tpl.o
 
 rabview : rabview.o rabbit.o tpl.o
-	$(CC) $(CFLAGS) -o $@ $< $(GL_LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(GL_LIB)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<

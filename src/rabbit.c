@@ -49,7 +49,7 @@ void rabbit_mesh_del(rabbit_mesh *M)
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
     HASH_DEL(M->edges, edge);
-    MSG(2, "removing edge %d", HASH_CNT(hh, M->edges));
+    MSG(2, "%s", "removing edge");
 
     free(edge->data);
     free(edge);
@@ -74,8 +74,7 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
     memcpy(node->index, index, 4 * sizeof(int));
 
     HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
-    MSG(1, "added node with preorder label %"PRIu64,
-        node_preorder_label(node));
+    MSG(1, "added node with preorder label %"PRIu64, node_preorder_label(node));
 
     return node;
   }
@@ -95,9 +94,12 @@ rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int index[4])
   rabbit_node *node;
 
   HASH_FIND(hh, M->nodes, index, 4 * sizeof(int), node);
-  HASH_DEL(M->nodes, node);
-  free(node->data);
-  free(node);
+
+  if (node != NULL) {
+    HASH_DEL(M->nodes, node);
+    free(node->data);
+    free(node);
+  }
 
   return NULL;
 }
@@ -128,10 +130,10 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
   int count = 0;
 
   if (flags & RABBIT_ANY) {
-    return HASH_CNT(hh, M->nodes);
+    return HASH_COUNT(M->nodes);
   }
   else if (flags & RABBIT_EDGE) {
-    return HASH_CNT(hh, M->edges);
+    return HASH_COUNT(M->edges);
   }
   else {
     HASH_ITER(hh, M->nodes, node, tmp) {
@@ -273,8 +275,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
           HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
 
-          MSG(2, "adding edge %d [%d %d %d] -> [%d %d %d] (v%d -> v%d)",
-              HASH_CNT(hh, M->edges),
+          MSG(2, "adding edge [%d %d %d] -> [%d %d %d] (v%d -> v%d)",
               edge->vertices[0], edge->vertices[1], edge->vertices[2],
               edge->vertices[3], edge->vertices[4], edge->vertices[5],
               v0, v1);
@@ -562,19 +563,19 @@ uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
 static void sanity_tests()
 {
   /* 1d trees, m=2 */
-  ASSERTEQ(tree_size_atlevel(1, 0), 1);
-  ASSERTEQ(tree_size_atlevel(1, 1), 3);
-  ASSERTEQ(tree_size_atlevel(1, 2), 7);
+  ASSERTEQI(tree_size_atlevel(1, 0), 1);
+  ASSERTEQI(tree_size_atlevel(1, 1), 3);
+  ASSERTEQI(tree_size_atlevel(1, 2), 7);
 
   /* 2d trees, m=4 */
-  ASSERTEQ(tree_size_atlevel(2, 0), 1);
-  ASSERTEQ(tree_size_atlevel(2, 1), 5);
-  ASSERTEQ(tree_size_atlevel(2, 2), 21);
+  ASSERTEQI(tree_size_atlevel(2, 0), 1);
+  ASSERTEQI(tree_size_atlevel(2, 1), 5);
+  ASSERTEQI(tree_size_atlevel(2, 2), 21);
 
   /* 3d trees, m=8 */
-  ASSERTEQ(tree_size_atlevel(3, 0), 1);
-  ASSERTEQ(tree_size_atlevel(3, 1), 9);
-  ASSERTEQ(tree_size_atlevel(3, 2), 73);
+  ASSERTEQI(tree_size_atlevel(3, 0), 1);
+  ASSERTEQI(tree_size_atlevel(3, 1), 9);
+  ASSERTEQI(tree_size_atlevel(3, 2), 73);
 
   /* does a cube have 12 edges? */
   if (1) {
@@ -587,7 +588,7 @@ static void sanity_tests()
     node->data[2] = 30.0;
     node->data[3] = 40.0;
     rabbit_mesh_build(mesh);
-    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+    ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
     rabbit_mesh_dump(mesh, "rabbit-test.mesh");
     rabbit_mesh_del(mesh);
   }
@@ -599,11 +600,11 @@ static void sanity_tests()
     ASSERTEQF(node->data[1], 20.0);
     ASSERTEQF(node->data[2], 30.0);
     ASSERTEQF(node->data[3], 40.0);
-    ASSERTEQ(mesh->config.max_depth, 10);
-    ASSERTEQ(mesh->config.doubles_per_node, 4);
-    ASSERTEQ(mesh->config.doubles_per_edge, 4);
-    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_ACTIVE), 1);
-    ASSERTEQ(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+    ASSERTEQI(mesh->config.max_depth, 10);
+    ASSERTEQI(mesh->config.doubles_per_node, 4);
+    ASSERTEQI(mesh->config.doubles_per_edge, 4);
+    ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_ACTIVE), 1);
+    ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
     rabbit_mesh_del(mesh);
   }
   if (1) {
@@ -619,16 +620,16 @@ static void sanity_tests()
     rabbit_mesh_build(mesh0);
     rabbit_mesh_build(mesh1);
     merge_error = rabbit_mesh_merge(mesh0, mesh1);
-    ASSERTEQ(merge_error, RABBIT_FAIL);
+    ASSERTEQI(merge_error, RABBIT_FAIL);
     config1.max_depth = 10;
     rabbit_mesh_del(mesh1);
     mesh1 = rabbit_mesh_new(config1);
     rabbit_mesh_putnode(mesh1, I1, RABBIT_ACTIVE);
     rabbit_mesh_build(mesh1);
     merge_error = rabbit_mesh_merge(mesh0, mesh1);
-    ASSERTEQ(merge_error, RABBIT_SUCCESS);
-    ASSERTEQ(rabbit_mesh_count(mesh1, RABBIT_ACTIVE), 0); // 0 overlapping nodes
-    ASSERTEQ(rabbit_mesh_count(mesh1, RABBIT_EDGE), 4);   // 4 overlapping edges
+    ASSERTEQI(merge_error, RABBIT_SUCCESS);
+    ASSERTEQI(rabbit_mesh_count(mesh1, RABBIT_ACTIVE), 0); // 0 overlapping nodes
+    ASSERTEQI(rabbit_mesh_count(mesh1, RABBIT_EDGE), 4);   // 4 overlapping edges
     rabbit_mesh_del(mesh0);
     rabbit_mesh_del(mesh1);
   }
