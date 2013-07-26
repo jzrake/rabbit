@@ -11,7 +11,7 @@
 #define RABBIT_GHOST    (1 << 3)
 #define RABBIT_FORCE    (1 << 4)
 #define RABBIT_EDGE     (1 << 5)
-
+#define RABBIT_FACE     (1 << 6)
 
 typedef struct rabbit_mesh rabbit_mesh; // opaque
 typedef struct rabbit_node rabbit_node;
@@ -122,7 +122,7 @@ struct rabbit_node {
 } ;
 
 struct rabbit_face {
-  int index[3];
+  int rnp[3]; // rational number position
   double *data;
   UT_hash_handle hh;
 } ;

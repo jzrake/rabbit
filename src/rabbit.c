@@ -141,6 +141,9 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
   if (flags & RABBIT_ANY) {
     return HASH_COUNT(M->nodes);
   }
+  else if (flags & RABBIT_FACE) {
+    return HASH_COUNT(M->faces);
+  }
   else if (flags & RABBIT_EDGE) {
     return HASH_COUNT(M->edges);
   }
@@ -196,21 +199,60 @@ void rabbit_mesh_build(rabbit_mesh *M)
   rabbit_edge *existing_edge = NULL;
   rabbit_face *face;
 
-  int neighbor_index[4];
+  int neighbor_index[2][3][4]; // (L/R, axis, index)
+  int LR, a, f;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    neighbor_index[0] = node->index[0];
-    neighbor_index[1] = node->index[1] + 1;
-    neighbor_index[2] = node->index[2] + 0;
-    neighbor_index[3] = node->index[3] + 0;
+    neighbor_index[0][0][0] = node->index[0];
+    neighbor_index[0][0][1] = node->index[1] - 1;
+    neighbor_index[0][0][2] = node->index[2];
+    neighbor_index[0][0][3] = node->index[3];
 
-    neighbor = rabbit_mesh_containing(M, neighbor_index);
+    neighbor_index[1][0][0] = node->index[0];
+    neighbor_index[1][0][1] = node->index[1] + 1;
+    neighbor_index[1][0][2] = node->index[2];
+    neighbor_index[1][0][3] = node->index[3];
 
-    if (neighbor) {
-      face = (rabbit_face*) malloc(sizeof(rabbit_face));
-      face->data = calloc(M->config.doubles_per_face, sizeof(double));
-      HASH_ADD(hh, M->faces, data, sizeof(void*), face);
+    neighbor_index[0][1][0] = node->index[0];
+    neighbor_index[0][1][1] = node->index[1];
+    neighbor_index[0][1][2] = node->index[2] - 1;
+    neighbor_index[0][1][3] = node->index[3];
+
+    neighbor_index[1][1][0] = node->index[0];
+    neighbor_index[1][1][1] = node->index[1];
+    neighbor_index[1][1][2] = node->index[2] + 1;
+    neighbor_index[1][1][3] = node->index[3];
+
+    neighbor_index[0][2][0] = node->index[0];
+    neighbor_index[0][2][1] = node->index[1];
+    neighbor_index[0][2][2] = node->index[2];
+    neighbor_index[0][2][3] = node->index[3] - 1;
+
+    neighbor_index[1][2][0] = node->index[0];
+    neighbor_index[1][2][1] = node->index[1];
+    neighbor_index[1][2][2] = node->index[2];
+    neighbor_index[1][2][3] = node->index[3] + 1;
+
+    for (LR=0; LR<=1; ++LR) {
+      for (a=0; a<3; ++a) {
+
+	neighbor = rabbit_mesh_containing(M, neighbor_index[LR][a]);
+
+	f = M->config.max_depth - node->index[0] - 1;
+
+	//	if (neighbor) {
+	  face = (rabbit_face*) malloc(sizeof(rabbit_face));
+	  face->data = calloc(M->config.doubles_per_face, sizeof(double));
+	  
+	  face->rnp[0] = (2 * node->index[1] + 1) << f;
+	  face->rnp[1] = (2 * node->index[2] + 1) << f;
+	  face->rnp[2] = (2 * node->index[3] + 1) << f;
+	  face->rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << f;
+
+	  HASH_ADD(hh, M->faces, data, sizeof(void*), face);
+	  //	}
+      }
     }
   }
 
@@ -607,7 +649,7 @@ static void sanity_tests()
   ASSERTEQI(tree_size_atlevel(3, 1), 9);
   ASSERTEQI(tree_size_atlevel(3, 2), 73);
 
-  /* does a cube have 12 edges? */
+  /* does a cube have 12 edges and 6 faces? */
   if (1) {
     int I[4] = { 0, 0, 0, 0 };
     rabbit_cfg config = { 10, 4, 4, 4 };
@@ -619,6 +661,7 @@ static void sanity_tests()
     node->data[3] = 40.0;
     rabbit_mesh_build(mesh);
     ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+    ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_FACE), 6);
     rabbit_mesh_dump(mesh, "rabbit-test.mesh");
     rabbit_mesh_del(mesh);
   }
@@ -665,9 +708,33 @@ static void sanity_tests()
   }
 }
 
+void write_meshes()
+{
+  /* write a uniform-depth 2d mesh */
+  int I[4] = { 0, 0, 0, 0 };
+  int i,j;
+  int D = 3;
+  rabbit_cfg config = { 10, 4, 4, 4 };
+  rabbit_mesh *mesh = rabbit_mesh_new(config);
+
+  for (i=0; i<(1<<D); ++i) {
+    for (j=0; j<(1<<D); ++j) {
+      I[0] = D;
+      I[1] = i;
+      I[2] = j;
+      I[3] = 0;
+      rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+    }
+  }
+  rabbit_mesh_build(mesh);
+  rabbit_mesh_dump(mesh, "rabbit-2d.mesh");
+  rabbit_mesh_del(mesh);
+}
+
 int main()
 {
   sanity_tests();
+  write_meshes();
 
   rabbit_cfg config = { 10, 4, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
