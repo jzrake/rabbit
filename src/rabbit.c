@@ -19,6 +19,7 @@
  */
 static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
+//static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
 static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
 static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
 
@@ -194,64 +195,35 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
 
 void rabbit_mesh_build(rabbit_mesh *M)
 {
-  rabbit_node *node, *tmp_node, *neighbor;
-  rabbit_edge *edge = NULL, *tmp_edge, *last_edge;
-  rabbit_edge *existing_edge = NULL;
+  rabbit_node *node, *tmp_node;
+  rabbit_edge *edge, *tmp_edge, *last_edge, *existing_edge;
   rabbit_face *face;
 
-  int neighbor_index[2][3][4]; // (L/R, axis, index)
+  int face_rnp[3];
   int LR, a, f;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    neighbor_index[0][0][0] = node->index[0];
-    neighbor_index[0][0][1] = node->index[1] - 1;
-    neighbor_index[0][0][2] = node->index[2];
-    neighbor_index[0][0][3] = node->index[3];
-
-    neighbor_index[1][0][0] = node->index[0];
-    neighbor_index[1][0][1] = node->index[1] + 1;
-    neighbor_index[1][0][2] = node->index[2];
-    neighbor_index[1][0][3] = node->index[3];
-
-    neighbor_index[0][1][0] = node->index[0];
-    neighbor_index[0][1][1] = node->index[1];
-    neighbor_index[0][1][2] = node->index[2] - 1;
-    neighbor_index[0][1][3] = node->index[3];
-
-    neighbor_index[1][1][0] = node->index[0];
-    neighbor_index[1][1][1] = node->index[1];
-    neighbor_index[1][1][2] = node->index[2] + 1;
-    neighbor_index[1][1][3] = node->index[3];
-
-    neighbor_index[0][2][0] = node->index[0];
-    neighbor_index[0][2][1] = node->index[1];
-    neighbor_index[0][2][2] = node->index[2];
-    neighbor_index[0][2][3] = node->index[3] - 1;
-
-    neighbor_index[1][2][0] = node->index[0];
-    neighbor_index[1][2][1] = node->index[1];
-    neighbor_index[1][2][2] = node->index[2];
-    neighbor_index[1][2][3] = node->index[3] + 1;
+    f = M->config.max_depth - node->index[0] - 1;
 
     for (LR=0; LR<=1; ++LR) {
       for (a=0; a<3; ++a) {
 
-	neighbor = rabbit_mesh_containing(M, neighbor_index[LR][a]);
+	face_rnp[0] = (2 * node->index[1] + 1) << f;
+	face_rnp[1] = (2 * node->index[2] + 1) << f;
+	face_rnp[2] = (2 * node->index[3] + 1) << f;
+	face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << f;
 
-	f = M->config.max_depth - node->index[0] - 1;
+	HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
 
-	//	if (neighbor) {
+	if (face == NULL) {
+
 	  face = (rabbit_face*) malloc(sizeof(rabbit_face));
 	  face->data = calloc(M->config.doubles_per_face, sizeof(double));
-	  
-	  face->rnp[0] = (2 * node->index[1] + 1) << f;
-	  face->rnp[1] = (2 * node->index[2] + 1) << f;
-	  face->rnp[2] = (2 * node->index[3] + 1) << f;
-	  face->rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << f;
+	  memcpy(face->rnp, face_rnp, 3 * sizeof(int));
 
-	  HASH_ADD(hh, M->faces, data, sizeof(void*), face);
-	  //	}
+	  HASH_ADD(hh, M->faces, rnp, 3 * sizeof(int), face);
+	}
       }
     }
   }
@@ -579,9 +551,9 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
           A->vertices[ax0+3] >= B->vertices[ax0+3]);
 }
 
-int node_preorder_compare(rabbit_node *a, rabbit_node *b)
+int node_preorder_compare(rabbit_node *A, rabbit_node *B)
 {
-  return node_preorder_label(a) - node_preorder_label(b);
+  return node_preorder_label(A) - node_preorder_label(B);
 }
 
 uint64_t node_preorder_label(rabbit_node *node)
@@ -662,12 +634,12 @@ static void sanity_tests()
     rabbit_mesh_build(mesh);
     ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
     ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_FACE), 6);
-    rabbit_mesh_dump(mesh, "rabbit-test.mesh");
+    rabbit_mesh_dump(mesh, "rabbit-single.mesh");
     rabbit_mesh_del(mesh);
   }
   if (1) {
     int I[4] = { 0, 0, 0, 0 };
-    rabbit_mesh *mesh = rabbit_mesh_load("rabbit-test.mesh");
+    rabbit_mesh *mesh = rabbit_mesh_load("rabbit-single.mesh");
     rabbit_node *node = rabbit_mesh_getnode(mesh, I);
     ASSERTEQF(node->data[0], 10.0);
     ASSERTEQF(node->data[1], 20.0);

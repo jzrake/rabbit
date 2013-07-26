@@ -13,11 +13,11 @@
 #define RABBIT_EDGE     (1 << 5)
 #define RABBIT_FACE     (1 << 6)
 
-typedef struct rabbit_mesh rabbit_mesh; // opaque
+typedef struct rabbit_mesh rabbit_mesh;
 typedef struct rabbit_node rabbit_node;
 typedef struct rabbit_face rabbit_face;
 typedef struct rabbit_edge rabbit_edge;
-typedef struct // fully defined
+typedef struct
 {
   int max_depth;
   int doubles_per_node;

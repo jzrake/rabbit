@@ -4,3 +4,4 @@ doc
 *.mesh
 /src/rabfile
 /src/rabrun
+/src/rabview
