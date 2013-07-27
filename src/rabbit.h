@@ -1,6 +1,8 @@
 #ifndef RABBIT_H
 #define RABBIT_H
 
+#include <inttypes.h> /* uint64_t */
+
 /* ------------------------------------------------------------------
  * RABBIT PUBLIC API
  * --------------------------------------------------------------- */
@@ -10,8 +12,9 @@
 #define RABBIT_ACTIVE   (1 << 2)
 #define RABBIT_GHOST    (1 << 3)
 #define RABBIT_FORCE    (1 << 4)
-#define RABBIT_EDGE     (1 << 5)
+#define RABBIT_NODE     (1 << 5)
 #define RABBIT_FACE     (1 << 6)
+#define RABBIT_EDGE     (1 << 7)
 
 typedef struct rabbit_mesh rabbit_mesh;
 typedef struct rabbit_node rabbit_node;
@@ -24,7 +27,14 @@ typedef struct
   int doubles_per_face;
   int doubles_per_edge;
 } rabbit_cfg;
-
+typedef struct
+{
+  int index[4];            /* index (depth, i, j, k) */
+  int vertices[24];        /* 3 int's x 8(node), 4(face), 2(edge) */
+  int type;                /* node, face, or edge */
+  int axis;                /* edge direction, or face normal */
+  uint64_t preorder_label; /* 3d for node, 2d for face, 1d for edge */
+} rabbit_geom;
 
 void         rabbit_mesh_del(rabbit_mesh *M);
 rabbit_mesh *rabbit_mesh_new(rabbit_cfg cfg);
@@ -32,11 +42,13 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags);
 rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int index[4]);
 rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int index[4]);
 rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4]);
+rabbit_geom  rabbit_mesh_geom(rabbit_mesh *M, int rnp[3]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
 int          rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N);
 void         rabbit_mesh_build(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 rabbit_mesh *rabbit_mesh_load(char *fname);
+
 
 void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth);
 void rabbit_edge_geom(rabbit_edge *F, int vertices[ 6], int *axis, int *depth);

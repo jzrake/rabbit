@@ -138,6 +138,97 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4])
   }
 }
 
+rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
+{
+  rabbit_geom geom;
+  int D = M->config.max_depth;
+  int H[3] = { 0, 0, 0 }; // height
+  int i, j, k, m;
+  int ax0, ax1, ax2;
+
+  /* find the position of the least significant active bit in the rational
+     number position, the "height" */
+  while (((rnp[0] >> H[0]) & 1) == 0 && H[0] < D) ++H[0];
+  while (((rnp[1] >> H[1]) & 1) == 0 && H[1] < D) ++H[1];
+  while (((rnp[2] >> H[2]) & 1) == 0 && H[2] < D) ++H[2];
+
+  /* if the height is the same along every axis then this is a node */
+  if (H[0] == H[1] && H[1] == H[2]) {
+    geom.type = RABBIT_NODE;
+    geom.axis = -1; /* no orientation */
+    geom.index[0] = D - H[0] - 1;
+    geom.index[1] = ((rnp[0] >> H[0]) - 1) >> 1;
+    geom.index[2] = ((rnp[1] >> H[0]) - 1) >> 1;
+    geom.index[3] = ((rnp[2] >> H[0]) - 1) >> 1;
+  }
+
+  /* otherwise it's a face or edge */
+  else {
+
+    if (H[1] == H[2]) { ax0 = 0; ax1 = 1; ax2 = 2; }
+    if (H[2] == H[0]) { ax0 = 1; ax1 = 2; ax2 = 0; }
+    if (H[0] == H[1]) { ax0 = 2; ax1 = 0; ax2 = 1; }
+
+    /* otherwise this is an edge or a face - for an edge the double height value
+       is larger than the remaining height value */
+
+    if (H[ax0] > H[ax1]) {
+      geom.axis = ax0;
+      geom.type = RABBIT_FACE;
+      geom.index[0] = D - H[ax1] - 1;
+      geom.index[1] = rnp[ax1] >> H[ax1];
+      geom.index[2] = rnp[ax2] >> H[ax2];
+      geom.index[3] = 0;
+    }
+    else {
+      geom.axis = ax0;
+      geom.type = RABBIT_EDGE;
+      geom.index[0] = D - H[ax0] - 1;
+      geom.index[1] = rnp[ax0] >> H[ax0];
+      geom.index[2] = 0;
+      geom.index[3] = 0;
+    }
+  }
+
+  switch (geom.type) {
+  case RABBIT_NODE:
+    for (i=0; i<=1; ++i) {
+      for (j=0; j<=1; ++j) {
+        for (k=0; k<=1; ++k) {
+          m = i*4 + j*2 + k*1;
+          geom.vertices[3*m + 0] = rnp[0] + (1 << H[0]) * (i==0 ? -1 : +1);
+          geom.vertices[3*m + 1] = rnp[1] + (1 << H[1]) * (j==0 ? -1 : +1);
+          geom.vertices[3*m + 2] = rnp[2] + (1 << H[2]) * (k==0 ? -1 : +1);
+        }
+      }
+    }
+    break;
+  case RABBIT_FACE:
+    for (i=0; i<=1; ++i) {
+      for (j=0; j<=1; ++j) {
+	m = i*2 + j*1;
+	geom.vertices[3*m + 0] = rnp[0];
+	geom.vertices[3*m + 1] = rnp[1];
+	geom.vertices[3*m + 2] = rnp[2];
+	geom.vertices[3*m + ax1] += (1 << H[ax1]) * (i==0 ? -1 : +1);
+	geom.vertices[3*m + ax2] += (1 << H[ax2]) * (j==0 ? -1 : +1);
+      }
+    }
+    break;
+  case RABBIT_EDGE:
+    for (i=0; i<=1; ++i) {
+      m = i*1;
+      geom.vertices[3*m + 0] = rnp[0];
+      geom.vertices[3*m + 1] = rnp[1];
+      geom.vertices[3*m + 2] = rnp[2];
+      geom.vertices[3*m + ax0] += (1 << H[ax0]) * (i==0 ? -1 : +1);
+    }
+    break;
+  }
+
+  return geom;
+}
+
 int rabbit_mesh_count(rabbit_mesh *M, int flags)
 {
   rabbit_node *node, *tmp;
@@ -391,7 +482,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
     if (last_edge != NULL) {
       if (edge_contains(last_edge, edge)) {
 
-	HASH_DEL(M->edges, last_edge);
+        HASH_DEL(M->edges, last_edge);
         MSG(2, "removing duplicate edge %d", removed++);
 
         free(last_edge->data);
@@ -959,6 +1050,49 @@ static void sanity_tests()
 
     rabbit_mesh_del(mesh);
   }
+  if (1) {
+    int D = 3;
+    rabbit_cfg config = { D, 4, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
+    rabbit_geom geom;
+    int rnp[3];
+
+    rnp[0] = 4;
+    rnp[1] = 4;
+    rnp[2] = 4;
+    geom = rabbit_mesh_geom(mesh, rnp);
+    ASSERTEQI(geom.type, RABBIT_NODE);
+    ASSERTEQI(geom.index[0], 0);
+    ASSERTEQI(geom.index[1], 0);
+
+    rnp[0] = 2; // depth 1 node
+    rnp[1] = 6;
+    rnp[2] = 2;
+    geom = rabbit_mesh_geom(mesh, rnp);
+    ASSERTEQI(geom.type, RABBIT_NODE);
+    ASSERTEQI(geom.index[0], 1);
+    ASSERTEQI(geom.index[1], 0);
+    ASSERTEQI(geom.index[2], 1);
+    ASSERTEQI(geom.index[3], 0);
+
+    rnp[0] = 0; // depth 1 face
+    rnp[1] = 2;
+    rnp[2] = 2;
+    geom = rabbit_mesh_geom(mesh, rnp);
+    ASSERTEQI(geom.type, RABBIT_FACE);
+    ASSERTEQI(geom.axis, 0);
+    ASSERTEQI(geom.index[0], 1);
+
+    rnp[0] = 4; // x-edge at depth 0
+    rnp[1] = 0;
+    rnp[2] = 0;
+    geom = rabbit_mesh_geom(mesh, rnp);
+    ASSERTEQI(geom.type, RABBIT_EDGE);
+    ASSERTEQI(geom.axis, 0);
+    ASSERTEQI(geom.index[0], 0);
+
+    rabbit_mesh_del(mesh);
+  }
 }
 
 void write_meshes()
@@ -992,26 +1126,26 @@ void write_meshes()
 
     for (i=0; i<2; ++i) {
       for (j=0; j<2; ++j) {
-	for (k=0; k<2; ++k) {
-	  if (i==0 && j==0 && k==0) continue;
-	  I[0] = 1;
-	  I[1] = i;
-	  I[2] = j;
-	  I[3] = k;
-	  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
-	}
+        for (k=0; k<2; ++k) {
+          if (i==0 && j==0 && k==0) continue;
+          I[0] = 1;
+          I[1] = i;
+          I[2] = j;
+          I[3] = k;
+          rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+        }
       }
     }
 
     for (i=0; i<2; ++i) {
       for (j=0; j<2; ++j) {
-	for (k=0; k<2; ++k) {
-	  I[0] = 2;
-	  I[1] = i;
-	  I[2] = j;
-	  I[3] = k;
-	  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
-	}
+        for (k=0; k<2; ++k) {
+          I[0] = 2;
+          I[1] = i;
+          I[2] = j;
+          I[3] = k;
+          rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+        }
       }
     }
 
@@ -1032,7 +1166,7 @@ int main()
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int d = 5;
+  int d = 3;
 
   for (i=0; i<(1<<d); ++i) {
     for (j=0; j<(1<<d); ++j) {
