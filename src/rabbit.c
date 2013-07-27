@@ -219,6 +219,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 	if (face == NULL) {
 
 	  face = (rabbit_face*) malloc(sizeof(rabbit_face));
+	  face->mesh = M;
 	  face->data = calloc(M->config.doubles_per_face, sizeof(double));
 	  memcpy(face->rnp, face_rnp, 3 * sizeof(int));
 
@@ -312,6 +313,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
         else {
 
           edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+	  edge->mesh = M;
           edge->data = (double*) calloc(M->config.doubles_per_edge,
                                         sizeof(double));
 
@@ -438,6 +440,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
 
   while (tpl_unpack(tn, 3) > 0) {
     edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+    edge->mesh = M;
     edge->data = (double*) calloc(M->config.doubles_per_edge,
 				  sizeof(double));
     memcpy(edge->vertices, V, 6 * sizeof(int));
@@ -455,10 +458,10 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   return M;
 }
 
-void rabbit_face_vertices(rabbit_face *F, int vertices[12])
+void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth)
 /*
- * Return the rational number position a face's vertices in counter-clockwise
- * order.
+ * Calculate the rational number position a face's vertices in counter-clockwise
+ * order, the orientation and depth of the face
  *
  * Faces are keyed by their rational number position (rnp), three integers
  * labeling the coordinates of the face's center. The depth and orientation of
@@ -473,7 +476,12 @@ void rabbit_face_vertices(rabbit_face *F, int vertices[12])
   while (((F->rnp[1] >> H[1]) & 1) == 0 && H[1] < D) ++H[1];
   while (((F->rnp[2] >> H[2]) & 1) == 0 && H[2] < D) ++H[2];
 
-  if (H[1] == H[2]) { /* x-directed face */
+  if (H[1] == H[2]) {
+
+    /* x-directed face */
+    if (axis) *axis = 0;
+    if (depth) *depth = D - H[1] - 1;
+
     vertices[ 0] = F->rnp[0];
     vertices[ 1] = F->rnp[1] - (1 << H[1]);
     vertices[ 2] = F->rnp[2] - (1 << H[1]);
@@ -490,7 +498,12 @@ void rabbit_face_vertices(rabbit_face *F, int vertices[12])
     vertices[10] = F->rnp[1] - (1 << H[1]);
     vertices[11] = F->rnp[2] + (1 << H[1]);
   }
-  if (H[2] == H[0]) { /* y-directed face */
+  if (H[2] == H[0]) {
+
+    /* y-directed face */
+    if (axis) *axis = 1;
+    if (depth) *depth = D - H[2] - 1;
+
     vertices[ 0] = F->rnp[0] - (1 << H[2]);
     vertices[ 1] = F->rnp[1];
     vertices[ 2] = F->rnp[2] - (1 << H[2]);
@@ -505,6 +518,11 @@ void rabbit_face_vertices(rabbit_face *F, int vertices[12])
     vertices[11] = F->rnp[2] - (1 << H[2]);
   }
   if (H[0] == H[1]) { /* z-directed face */
+
+    /* z-directed face */
+    if (axis) *axis = 2;
+    if (depth) *depth = D - H[0] - 1;
+
     vertices[ 0] = F->rnp[0] - (1 << H[0]);
     vertices[ 1] = F->rnp[1] - (1 << H[0]);
     vertices[ 2] = F->rnp[2];
@@ -523,6 +541,21 @@ void rabbit_face_vertices(rabbit_face *F, int vertices[12])
 void rabbit_edge_vertices(rabbit_edge *E, int vertices[6])
 {
   memcpy(vertices, E->vertices, 6 * sizeof(int));
+}
+
+int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
+{
+  int A_vertices[12];
+  int B_vertices[12];
+  int A_depth;
+  int B_depth;
+  int A_axis;
+  int B_axis;
+
+  rabbit_face_geom(A, A_vertices, &A_axis, &A_depth);
+  rabbit_face_geom(B, B_vertices, &B_axis, &B_depth);
+
+  return 0;
 }
 
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
@@ -751,6 +784,7 @@ static void sanity_tests()
   if (1) {
     int D=10, d=1, i=1, j=0, k=0;
     int vertices[12];
+    int axis, depth;
     rabbit_cfg config = { D, 4, 4, 4 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
     rabbit_face F;
@@ -773,8 +807,10 @@ static void sanity_tests()
     F.rnp[1] = (2 * j + 1) << (D - d - 1);
     F.rnp[2] = (2 * k + 0) << (D - d - 1);
 
-    rabbit_face_vertices(&F, vertices);
+    rabbit_face_geom(&F, vertices, &axis, &depth);
 
+    ASSERTEQI(axis, 2);
+    ASSERTEQI(depth, 1);
     ASSERTEQI(vertices[0], (2 * i + 0) << (D - d - 1));
     ASSERTEQI(vertices[1], (2 * j + 0) << (D - d - 1));
     ASSERTEQI(vertices[2], (2 * k + 0) << (D - d - 1));
