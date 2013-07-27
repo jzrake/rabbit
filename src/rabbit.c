@@ -162,32 +162,60 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
     geom.index[3] = ((rnp[2] >> H[0]) - 1) >> 1;
   }
 
-  /* otherwise it's a face or edge */
-  else {
+  /*
+   * otherwise it's a face or edge
+   *
+   * If all 3 heights are different, it's an edge and the orientation and
+   * depth correspond to the smallest height.
+   *
+   * Put another way, it's an edge if and only if there is a unique smallest
+   * height value, and otherwise it's a face. The reasoning is that getting to
+   * a face from a node only involves increasing the height along one axis, so
+   * the height of the other two stays the same.
+   */
 
-    if (H[1] == H[2]) { ax0 = 0; ax1 = 1; ax2 = 2; }
-    if (H[2] == H[0]) { ax0 = 1; ax1 = 2; ax2 = 0; }
-    if (H[0] == H[1]) { ax0 = 2; ax1 = 0; ax2 = 1; }
+  else if (H[0] < H[1] && H[0] < H[2]) {
+    geom.type = RABBIT_EDGE;
+    geom.axis = 0;
+  }
+  else if (H[1] < H[2] && H[1] < H[0]) {
+    geom.type = RABBIT_EDGE;
+    geom.axis = 1;
+  }
+  else if (H[2] < H[0] && H[2] < H[1]) {
+    geom.type = RABBIT_EDGE;
+    geom.axis = 2;
+  }
+  else if (H[1] == H[2]) {
+    geom.axis = 0;
+    geom.type = H[0] < H[1] ? RABBIT_EDGE : RABBIT_FACE;
+  }
+  else if (H[2] == H[0]) {
+    geom.axis = 1;
+    geom.type = H[1] < H[2] ? RABBIT_EDGE : RABBIT_FACE;
+  }
+  else if (H[0] == H[1]) {
+    geom.axis = 2;
+    geom.type = H[2] < H[0] ? RABBIT_EDGE : RABBIT_FACE;
+  }
 
-    /* otherwise this is an edge or a face - for an edge the double height value
-       is larger than the remaining height value */
-
-    if (H[ax0] > H[ax1]) {
-      geom.axis = ax0;
-      geom.type = RABBIT_FACE;
-      geom.index[0] = D - H[ax1] - 1;
-      geom.index[1] = rnp[ax1] >> H[ax1];
-      geom.index[2] = rnp[ax2] >> H[ax2];
-      geom.index[3] = 0;
-    }
-    else {
-      geom.axis = ax0;
-      geom.type = RABBIT_EDGE;
-      geom.index[0] = D - H[ax0] - 1;
-      geom.index[1] = rnp[ax0] >> H[ax0];
-      geom.index[2] = 0;
-      geom.index[3] = 0;
-    }
+  if (geom.type == RABBIT_FACE) {
+    ax0 = geom.axis;
+    ax1 = (ax0 + 1) % 3;
+    ax2 = (ax0 + 2) % 3;
+    geom.index[0] = D - H[ax1] - 1;
+    geom.index[1] = rnp[ax1] >> H[ax1];
+    geom.index[2] = rnp[ax2] >> H[ax2];
+    geom.index[3] = 0;
+  }
+  else if (geom.type == RABBIT_EDGE) {
+    ax0 = geom.axis;
+    ax1 = (ax0 + 1) % 3;
+    ax2 = (ax0 + 2) % 3;
+    geom.index[0] = D - H[ax0] - 1;
+    geom.index[1] = rnp[ax0] >> H[ax0];
+    geom.index[2] = 0;
+    geom.index[3] = 0;
   }
 
   switch (geom.type) {
@@ -279,10 +307,10 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
   }
 
   HASH_ITER(hh, N->edges, edge, tmp_edge) {
-    HASH_FIND(hh, M->edges, edge->vertices, 6 * sizeof(int), rpl_edge);
+    HASH_FIND(hh, M->edges, edge->rnp, 3 * sizeof(int), rpl_edge);
     if (rpl_edge == NULL) {
       HASH_DEL(N->edges, edge);
-      HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+      HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
     }
   }
   return RABBIT_SUCCESS;
@@ -368,105 +396,46 @@ void rabbit_mesh_build(rabbit_mesh *M)
   }
 
 
-  int vertices[8][3];
-  int start[3][4] = {{0, 2, 4, 6},
-                     {0, 4, 1, 5},
-                     {0, 1, 2, 3}};
-  int jumps[3] = { 1, 2, 4 };
-
-  /* ------------------
-   * X      Y      Z
-   * ------------------
-   * 0->1   0->2   0->4
-   * 2->3   4->6   1->5
-   * 4->5   1->3   2->6
-   * 6->7   5->7   3->7
-   * ------------------
-   */
-
-
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    int n; // starting node counter, [0, 4)
-    int a, ai; // axis counter, [0, 3)
-    int d = node->index[0]; // depth
-    int h = M->config.max_depth - d + 1; // height !!! fix me (+1 -> -1) !!!
+    int rnp[3];
+    int ax0, ax1, ax2;
+    int i, j;
 
-    /* set the index (i,j,k) of each of this node's 8 vertices */
-
-    vertices[0][0] = (node->index[1] + 0) << h;
-    vertices[0][1] = (node->index[2] + 0) << h;
-    vertices[0][2] = (node->index[3] + 0) << h;
-    vertices[1][0] = (node->index[1] + 0) << h;
-    vertices[1][1] = (node->index[2] + 0) << h;
-    vertices[1][2] = (node->index[3] + 1) << h;
-    vertices[2][0] = (node->index[1] + 0) << h;
-    vertices[2][1] = (node->index[2] + 1) << h;
-    vertices[2][2] = (node->index[3] + 0) << h;
-    vertices[3][0] = (node->index[1] + 0) << h;
-    vertices[3][1] = (node->index[2] + 1) << h;
-    vertices[3][2] = (node->index[3] + 1) << h;
-    vertices[4][0] = (node->index[1] + 1) << h;
-    vertices[4][1] = (node->index[2] + 0) << h;
-    vertices[4][2] = (node->index[3] + 0) << h;
-    vertices[5][0] = (node->index[1] + 1) << h;
-    vertices[5][1] = (node->index[2] + 0) << h;
-    vertices[5][2] = (node->index[3] + 1) << h;
-    vertices[6][0] = (node->index[1] + 1) << h;
-    vertices[6][1] = (node->index[2] + 1) << h;
-    vertices[6][2] = (node->index[3] + 0) << h;
-    vertices[7][0] = (node->index[1] + 1) << h;
-    vertices[7][1] = (node->index[2] + 1) << h;
-    vertices[7][2] = (node->index[3] + 1) << h;
-
-
-    /* loop over 3 axes 'a' */
+    h = M->config.max_depth - node->index[0] - 1;
 
     for (a=0; a<3; ++a) {
+      for (i=0; i<=1; ++i) {
+	for (j=0; j<=1; ++j) {
+
+	  rnp[0] = (2*node->index[1] + 1) << h;
+	  rnp[1] = (2*node->index[2] + 1) << h;
+	  rnp[2] = (2*node->index[3] + 1) << h;
+
+	  ax0 = (a + 0) % 3;
+	  ax1 = (a + 1) % 3;
+	  ax2 = (a + 2) % 3;
+
+	  rnp[ax1] += (1 << h) * (i==0 ? -1 : +1);
+	  rnp[ax2] += (1 << h) * (j==0 ? -1 : +1);
 
 
-      /* loop over 4 starting vertices 's' */
+	  HASH_FIND(hh, M->edges, rnp, 3 * sizeof(int), existing_edge);
 
-      for (n=0; n<4; ++n) {
+	  if (existing_edge == NULL) {
 
-        int v0 = start[a][n];
-        int v1 = start[a][n] + jumps[a];
-        int edge_vertices[6];
-
-        for (ai=0; ai<3; ++ai) {
-          edge_vertices[ai+0] = vertices[v0][ai];
-          edge_vertices[ai+3] = vertices[v1][ai];
-        }
-
-        HASH_FIND(hh, M->edges, edge_vertices, 6 * sizeof(int), existing_edge);
-
-
-        if (existing_edge != NULL) {
-
-          MSG(2, "edge exists : [%d %d %d] -> [%d %d %d]",
-              edge_vertices[0], edge_vertices[1], edge_vertices[2],
-              edge_vertices[3], edge_vertices[4], edge_vertices[5]);
-        }
-        else {
-
-          edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
-          edge->mesh = M;
-          edge->data = (double*) calloc(M->config.doubles_per_edge,
-                                        sizeof(double));
-
-          memcpy(edge->vertices, edge_vertices, 6 * sizeof(int));
-
-          HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
-
-          MSG(2, "adding edge [%d %d %d] -> [%d %d %d] (v%d -> v%d)",
-              edge->vertices[0], edge->vertices[1], edge->vertices[2],
-              edge->vertices[3], edge->vertices[4], edge->vertices[5],
-              v0, v1);
-        }
+	    edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
+	    edge->mesh = M;
+	    edge->data = (double*) calloc(M->config.doubles_per_edge,
+					  sizeof(double));
+	    
+	    memcpy(edge->rnp, rnp, 3 * sizeof(int));
+	    HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
+	  }
+	}
       }
     }
   }
-
 
   last_edge = NULL;
   edge = NULL;
@@ -496,7 +465,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 {
   int n;
-  int I[4], V[6];
+  int I[4], V[3];
   rabbit_cfg config_val;
   double node_data_val;
   double edge_data_val;
@@ -506,7 +475,7 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
                          &config_val,     // 0
                          I, 4,            // 1
                          &node_data_val,  // 2
-                         V, 6,            // 3
+                         V, 3,            // 3
                          &edge_data_val); // 4
 
   config_val = M->config;
@@ -525,7 +494,7 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   }
 
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
-    memcpy(V, edge->vertices, 6 * sizeof(int));
+    memcpy(V, edge->rnp, 3 * sizeof(int));
 
     tpl_pack(tn, 3);
 
@@ -545,7 +514,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   rabbit_mesh *M;
 
   int n;
-  int I[4], V[6];
+  int I[4], V[3];
   rabbit_cfg config_val;
   double node_data_val;
   double edge_data_val;
@@ -555,7 +524,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
                          &config_val,     // 0
                          I, 4,            // 1
                          &node_data_val,  // 2
-                         V, 6,            // 3
+                         V, 3,            // 3
                          &edge_data_val); // 4
 
   tpl_load(tn, TPL_FILE, fname);
@@ -579,7 +548,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
     edge->mesh = M;
     edge->data = (double*) calloc(M->config.doubles_per_edge,
                                   sizeof(double));
-    memcpy(edge->vertices, V, 6 * sizeof(int));
+    memcpy(edge->rnp, V, 3 * sizeof(int));
 
     tpl_unpack(tn, 3); // unpack data array
 
@@ -587,7 +556,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
       tpl_unpack(tn, 4);
       edge->data[n] = edge_data_val;
     }
-    HASH_ADD(hh, M->edges, vertices, 6 * sizeof(int), edge);
+    HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
   }
 
   tpl_free(tn);
@@ -674,11 +643,6 @@ void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth)
   }
 }
 
-void rabbit_edge_vertices(rabbit_edge *E, int vertices[6])
-{
-  memcpy(vertices, E->vertices, 6 * sizeof(int));
-}
-
 int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 {
   int A_index[3];
@@ -733,10 +697,14 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
   int n, len_a, len_b, axis_a, axis_b, depth_a=0, depth_b=0;
   int ax0, ax1, ax2;
 
+  rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
+  rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
+
+
   for (n=0; n<3; ++n) {
 
-    len_a = A->vertices[n+3] - A->vertices[n];
-    len_b = B->vertices[n+3] - B->vertices[n];
+    len_a = A_geom.vertices[n+3] - A_geom.vertices[n];
+    len_b = B_geom.vertices[n+3] - B_geom.vertices[n];
 
     if (len_a != 0) {
       axis_a = n;
@@ -759,18 +727,18 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
   }
 
   /* coordinate of next axis */
-  if (A->vertices[ax1] != B->vertices[ax1]) {
-    return A->vertices[ax1] - B->vertices[ax1];
+  if (A_geom.vertices[ax1] != B_geom.vertices[ax1]) {
+    return A_geom.vertices[ax1] - B_geom.vertices[ax1];
   }
 
   /* coordinate of next axis */
-  if (A->vertices[ax2] != B->vertices[ax2]) {
-    return A->vertices[ax2] - B->vertices[ax2];
+  if (A_geom.vertices[ax2] != B_geom.vertices[ax2]) {
+    return A_geom.vertices[ax2] - B_geom.vertices[ax2];
   }
 
   /* left endpoint of segment along its own axis */
-  if (A->vertices[ax0] != B->vertices[ax0]) {
-    return A->vertices[ax0] - B->vertices[ax0];
+  if (A_geom.vertices[ax0] != B_geom.vertices[ax0]) {
+    return A_geom.vertices[ax0] - B_geom.vertices[ax0];
   }
 
   /* depth of segment */
@@ -811,8 +779,8 @@ int face_contains(rabbit_face *A, rabbit_face *B)
 
   return (A_vertices[3*0 + ax1] <= B_vertices[3*0 + ax1] &&
           A_vertices[3*0 + ax2] <= B_vertices[3*0 + ax2] &&
-          A_vertices[3*2 + ax1] >= B_vertices[3*2 + ax1] &&
-          A_vertices[3*2 + ax2] >= B_vertices[3*2 + ax2]);
+          A_vertices[3*3 + ax1] >= B_vertices[3*3 + ax1] &&
+          A_vertices[3*3 + ax2] >= B_vertices[3*3 + ax2]);
 }
 
 int edge_contains(rabbit_edge *A, rabbit_edge *B)
@@ -823,10 +791,13 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
   int n, len_a, len_b, axis_a, axis_b;
   int ax0, ax1, ax2;
 
+  rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
+  rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
+
   for (n=0; n<3; ++n) {
 
-    len_a = A->vertices[n+3] - A->vertices[n];
-    len_b = B->vertices[n+3] - B->vertices[n];
+    len_a = A_geom.vertices[n+3] - A_geom.vertices[n];
+    len_b = B_geom.vertices[n+3] - B_geom.vertices[n];
 
     if (len_a != 0) {
       axis_a = n;
@@ -847,15 +818,15 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
   }
 
   /* not co-linear? */
-  if (A->vertices[ax1] != B->vertices[ax1]) {
+  if (A_geom.vertices[ax1] != B_geom.vertices[ax1]) {
     return 0;
   }
-  if (A->vertices[ax2] != B->vertices[ax2]) {
+  if (A_geom.vertices[ax2] != B_geom.vertices[ax2]) {
     return 0;
   }
 
-  return (A->vertices[ax0+0] <= B->vertices[ax0+0] &&
-          A->vertices[ax0+3] >= B->vertices[ax0+3]);
+  return (A_geom.vertices[ax0+0] <= B_geom.vertices[ax0+0] &&
+          A_geom.vertices[ax0+3] >= B_geom.vertices[ax0+3]);
 }
 
 int node_preorder_compare(rabbit_node *A, rabbit_node *B)
@@ -1098,7 +1069,7 @@ static void sanity_tests()
 void write_meshes()
 {
   /* write a uniform-depth 2d mesh */
-  if (0) {
+  if (1) {
     int I[4] = { 0, 0, 0, 0 };
     int i,j;
     int d = 3;
@@ -1166,7 +1137,7 @@ int main()
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int d = 3;
+  int d = 5;
 
   for (i=0; i<(1<<d); ++i) {
     for (j=0; j<(1<<d); ++j) {

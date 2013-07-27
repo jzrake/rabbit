@@ -144,7 +144,7 @@ struct rabbit_face {
 } ;
 
 struct rabbit_edge {
-  int vertices[6];
+  int rnp[3];
   double *data;
   rabbit_mesh *mesh;
   UT_hash_handle hh;
