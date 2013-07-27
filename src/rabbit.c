@@ -17,7 +17,9 @@
  * private functions
  *
  */
+static uint64_t preorder_label(int index[4], int max_depth, int r);
 static uint64_t node_preorder_label(rabbit_node *node);
+static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
 //static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
 static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
@@ -200,31 +202,31 @@ void rabbit_mesh_build(rabbit_mesh *M)
   rabbit_face *face;
 
   int face_rnp[3];
-  int LR, a, f;
+  int LR, a, h;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    f = M->config.max_depth - node->index[0] - 1;
+    h = M->config.max_depth - node->index[0] - 1;
 
     for (LR=0; LR<=1; ++LR) {
       for (a=0; a<3; ++a) {
 
-	face_rnp[0] = (2 * node->index[1] + 1) << f;
-	face_rnp[1] = (2 * node->index[2] + 1) << f;
-	face_rnp[2] = (2 * node->index[3] + 1) << f;
-	face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << f;
+        face_rnp[0] = (2 * node->index[1] + 1) << h;
+        face_rnp[1] = (2 * node->index[2] + 1) << h;
+        face_rnp[2] = (2 * node->index[3] + 1) << h;
+        face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << h;
 
-	HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
+        HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
 
-	if (face == NULL) {
+        if (face == NULL) {
 
-	  face = (rabbit_face*) malloc(sizeof(rabbit_face));
-	  face->mesh = M;
-	  face->data = calloc(M->config.doubles_per_face, sizeof(double));
-	  memcpy(face->rnp, face_rnp, 3 * sizeof(int));
+          face = (rabbit_face*) malloc(sizeof(rabbit_face));
+          face->mesh = M;
+          face->data = calloc(M->config.doubles_per_face, sizeof(double));
+          memcpy(face->rnp, face_rnp, 3 * sizeof(int));
 
-	  HASH_ADD(hh, M->faces, rnp, 3 * sizeof(int), face);
-	}
+          HASH_ADD(hh, M->faces, rnp, 3 * sizeof(int), face);
+        }
       }
     }
   }
@@ -253,34 +255,34 @@ void rabbit_mesh_build(rabbit_mesh *M)
     int n; // starting node counter, [0, 4)
     int a, ai; // axis counter, [0, 3)
     int d = node->index[0]; // depth
-    int f = M->config.max_depth - d + 1; // rational index log2 denominator
+    int h = M->config.max_depth - d + 1; // height !!! fix me (+1 -> -1) !!!
 
     /* set the index (i,j,k) of each of this node's 8 vertices */
 
-    vertices[0][0] = (node->index[1] + 0) << f;
-    vertices[0][1] = (node->index[2] + 0) << f;
-    vertices[0][2] = (node->index[3] + 0) << f;
-    vertices[1][0] = (node->index[1] + 0) << f;
-    vertices[1][1] = (node->index[2] + 0) << f;
-    vertices[1][2] = (node->index[3] + 1) << f;
-    vertices[2][0] = (node->index[1] + 0) << f;
-    vertices[2][1] = (node->index[2] + 1) << f;
-    vertices[2][2] = (node->index[3] + 0) << f;
-    vertices[3][0] = (node->index[1] + 0) << f;
-    vertices[3][1] = (node->index[2] + 1) << f;
-    vertices[3][2] = (node->index[3] + 1) << f;
-    vertices[4][0] = (node->index[1] + 1) << f;
-    vertices[4][1] = (node->index[2] + 0) << f;
-    vertices[4][2] = (node->index[3] + 0) << f;
-    vertices[5][0] = (node->index[1] + 1) << f;
-    vertices[5][1] = (node->index[2] + 0) << f;
-    vertices[5][2] = (node->index[3] + 1) << f;
-    vertices[6][0] = (node->index[1] + 1) << f;
-    vertices[6][1] = (node->index[2] + 1) << f;
-    vertices[6][2] = (node->index[3] + 0) << f;
-    vertices[7][0] = (node->index[1] + 1) << f;
-    vertices[7][1] = (node->index[2] + 1) << f;
-    vertices[7][2] = (node->index[3] + 1) << f;
+    vertices[0][0] = (node->index[1] + 0) << h;
+    vertices[0][1] = (node->index[2] + 0) << h;
+    vertices[0][2] = (node->index[3] + 0) << h;
+    vertices[1][0] = (node->index[1] + 0) << h;
+    vertices[1][1] = (node->index[2] + 0) << h;
+    vertices[1][2] = (node->index[3] + 1) << h;
+    vertices[2][0] = (node->index[1] + 0) << h;
+    vertices[2][1] = (node->index[2] + 1) << h;
+    vertices[2][2] = (node->index[3] + 0) << h;
+    vertices[3][0] = (node->index[1] + 0) << h;
+    vertices[3][1] = (node->index[2] + 1) << h;
+    vertices[3][2] = (node->index[3] + 1) << h;
+    vertices[4][0] = (node->index[1] + 1) << h;
+    vertices[4][1] = (node->index[2] + 0) << h;
+    vertices[4][2] = (node->index[3] + 0) << h;
+    vertices[5][0] = (node->index[1] + 1) << h;
+    vertices[5][1] = (node->index[2] + 0) << h;
+    vertices[5][2] = (node->index[3] + 1) << h;
+    vertices[6][0] = (node->index[1] + 1) << h;
+    vertices[6][1] = (node->index[2] + 1) << h;
+    vertices[6][2] = (node->index[3] + 0) << h;
+    vertices[7][0] = (node->index[1] + 1) << h;
+    vertices[7][1] = (node->index[2] + 1) << h;
+    vertices[7][2] = (node->index[3] + 1) << h;
 
 
     /* loop over 3 axes 'a' */
@@ -313,7 +315,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
         else {
 
           edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
-	  edge->mesh = M;
+          edge->mesh = M;
           edge->data = (double*) calloc(M->config.doubles_per_edge,
                                         sizeof(double));
 
@@ -367,11 +369,11 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   rabbit_node *node, *tmp_node;
   rabbit_edge *edge, *tmp_edge;
   tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
-			 &config_val,     // 0
-			 I, 4,            // 1
-			 &node_data_val,  // 2
-			 V, 6,            // 3
-			 &edge_data_val); // 4
+                         &config_val,     // 0
+                         I, 4,            // 1
+                         &node_data_val,  // 2
+                         V, 6,            // 3
+                         &edge_data_val); // 4
 
   config_val = M->config;
   tpl_pack(tn, 0);
@@ -416,11 +418,11 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   rabbit_node *node;
   rabbit_edge *edge;
   tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
-			 &config_val,     // 0
-			 I, 4,            // 1
-			 &node_data_val,  // 2
-			 V, 6,            // 3
-			 &edge_data_val); // 4
+                         &config_val,     // 0
+                         I, 4,            // 1
+                         &node_data_val,  // 2
+                         V, 6,            // 3
+                         &edge_data_val); // 4
 
   tpl_load(tn, TPL_FILE, fname);
   tpl_unpack(tn, 0);
@@ -442,7 +444,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
     edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
     edge->mesh = M;
     edge->data = (double*) calloc(M->config.doubles_per_edge,
-				  sizeof(double));
+                                  sizeof(double));
     memcpy(edge->vertices, V, 6 * sizeof(int));
 
     tpl_unpack(tn, 3); // unpack data array
@@ -481,60 +483,60 @@ void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth)
     /* x-directed face */
     if (axis) *axis = 0;
     if (depth) *depth = D - H[1] - 1;
-
-    vertices[ 0] = F->rnp[0];
-    vertices[ 1] = F->rnp[1] - (1 << H[1]);
-    vertices[ 2] = F->rnp[2] - (1 << H[1]);
-
-    vertices[ 3] = F->rnp[0];
-    vertices[ 4] = F->rnp[1] + (1 << H[1]);
-    vertices[ 5] = F->rnp[2] - (1 << H[1]);
-
-    vertices[ 6] = F->rnp[0];
-    vertices[ 7] = F->rnp[1] + (1 << H[1]);
-    vertices[ 8] = F->rnp[2] + (1 << H[1]);
-
-    vertices[ 9] = F->rnp[0];
-    vertices[10] = F->rnp[1] - (1 << H[1]);
-    vertices[11] = F->rnp[2] + (1 << H[1]);
+    if (vertices) {
+      vertices[ 0] = F->rnp[0];
+      vertices[ 1] = F->rnp[1] - (1 << H[1]);
+      vertices[ 2] = F->rnp[2] - (1 << H[1]);
+      vertices[ 3] = F->rnp[0];
+      vertices[ 4] = F->rnp[1] + (1 << H[1]);
+      vertices[ 5] = F->rnp[2] - (1 << H[1]);
+      vertices[ 6] = F->rnp[0];
+      vertices[ 7] = F->rnp[1] + (1 << H[1]);
+      vertices[ 8] = F->rnp[2] + (1 << H[1]);
+      vertices[ 9] = F->rnp[0];
+      vertices[10] = F->rnp[1] - (1 << H[1]);
+      vertices[11] = F->rnp[2] + (1 << H[1]);
+    }
   }
   if (H[2] == H[0]) {
 
     /* y-directed face */
     if (axis) *axis = 1;
     if (depth) *depth = D - H[2] - 1;
-
-    vertices[ 0] = F->rnp[0] - (1 << H[2]);
-    vertices[ 1] = F->rnp[1];
-    vertices[ 2] = F->rnp[2] - (1 << H[2]);
-    vertices[ 3] = F->rnp[0] - (1 << H[2]);
-    vertices[ 4] = F->rnp[1];
-    vertices[ 5] = F->rnp[2] + (1 << H[2]);
-    vertices[ 6] = F->rnp[0] + (1 << H[2]);
-    vertices[ 7] = F->rnp[1];
-    vertices[ 8] = F->rnp[2] + (1 << H[2]);
-    vertices[ 9] = F->rnp[0] + (1 << H[2]);
-    vertices[10] = F->rnp[1];
-    vertices[11] = F->rnp[2] - (1 << H[2]);
+    if (vertices) {
+      vertices[ 0] = F->rnp[0] - (1 << H[2]);
+      vertices[ 1] = F->rnp[1];
+      vertices[ 2] = F->rnp[2] - (1 << H[2]);
+      vertices[ 3] = F->rnp[0] - (1 << H[2]);
+      vertices[ 4] = F->rnp[1];
+      vertices[ 5] = F->rnp[2] + (1 << H[2]);
+      vertices[ 6] = F->rnp[0] + (1 << H[2]);
+      vertices[ 7] = F->rnp[1];
+      vertices[ 8] = F->rnp[2] + (1 << H[2]);
+      vertices[ 9] = F->rnp[0] + (1 << H[2]);
+      vertices[10] = F->rnp[1];
+      vertices[11] = F->rnp[2] - (1 << H[2]);
+    }
   }
   if (H[0] == H[1]) { /* z-directed face */
 
     /* z-directed face */
     if (axis) *axis = 2;
     if (depth) *depth = D - H[0] - 1;
-
-    vertices[ 0] = F->rnp[0] - (1 << H[0]);
-    vertices[ 1] = F->rnp[1] - (1 << H[0]);
-    vertices[ 2] = F->rnp[2];
-    vertices[ 3] = F->rnp[0] + (1 << H[0]);
-    vertices[ 4] = F->rnp[1] - (1 << H[0]);
-    vertices[ 5] = F->rnp[2];
-    vertices[ 6] = F->rnp[0] + (1 << H[0]);
-    vertices[ 7] = F->rnp[1] + (1 << H[0]);
-    vertices[ 8] = F->rnp[2];
-    vertices[ 9] = F->rnp[0] - (1 << H[0]);
-    vertices[10] = F->rnp[1] + (1 << H[0]);
-    vertices[11] = F->rnp[2];
+    if (vertices) {
+      vertices[ 0] = F->rnp[0] - (1 << H[0]);
+      vertices[ 1] = F->rnp[1] - (1 << H[0]);
+      vertices[ 2] = F->rnp[2];
+      vertices[ 3] = F->rnp[0] + (1 << H[0]);
+      vertices[ 4] = F->rnp[1] - (1 << H[0]);
+      vertices[ 5] = F->rnp[2];
+      vertices[ 6] = F->rnp[0] + (1 << H[0]);
+      vertices[ 7] = F->rnp[1] + (1 << H[0]);
+      vertices[ 8] = F->rnp[2];
+      vertices[ 9] = F->rnp[0] - (1 << H[0]);
+      vertices[10] = F->rnp[1] + (1 << H[0]);
+      vertices[11] = F->rnp[2];
+    }
   }
 }
 
@@ -545,17 +547,51 @@ void rabbit_edge_vertices(rabbit_edge *E, int vertices[6])
 
 int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 {
-  int A_vertices[12];
-  int B_vertices[12];
+  int A_index[3];
+  int B_index[3];
   int A_depth;
   int B_depth;
   int A_axis;
   int B_axis;
+  int A_label;
+  int B_label;
+  int A_height;
+  int B_height;
+  int ax0, ax1, ax2;
 
-  rabbit_face_geom(A, A_vertices, &A_axis, &A_depth);
-  rabbit_face_geom(B, B_vertices, &B_axis, &B_depth);
+  rabbit_face_geom(A, NULL, &A_axis, &A_depth);
+  rabbit_face_geom(B, NULL, &B_axis, &B_depth);
 
-  return 0;
+  A_height = A->mesh->config.max_depth - A_depth - 1;
+  B_height = B->mesh->config.max_depth - B_depth - 1;
+
+  /* orientation (x, y, z) - directed */
+  if (A_axis != B_axis) {
+    return B_axis - A_axis;
+  }
+
+  ax0 = A_axis;
+  ax1 = (ax0 + 1) % 3;
+  ax2 = (ax0 + 2) % 3;
+
+  /* coordinate along face normal */
+  if (A->rnp[ax0] != B->rnp[ax0]) {
+    return B->rnp[ax0] - A->rnp[ax0];
+  }
+
+  A_index[0] = A_depth;
+  A_index[1] = ((A->rnp[ax1] >> A_height) - 1) >> 1;
+  A_index[2] = ((A->rnp[ax2] >> A_height) - 1) >> 1;
+
+  B_index[0] = B_depth;
+  B_index[1] = ((B->rnp[ax1] >> B_height) - 1) >> 1;
+  B_index[2] = ((B->rnp[ax2] >> B_height) - 1) >> 1;
+
+  /* 2d preorder label in the plane of both faces */
+  A_label = preorder_label(A_index, A->mesh->config.max_depth, 2);
+  B_label = preorder_label(B_index, B->mesh->config.max_depth, 2);
+
+  return B_label - A_label;
 }
 
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
@@ -660,28 +696,36 @@ int node_preorder_compare(rabbit_node *A, rabbit_node *B)
 }
 
 uint64_t node_preorder_label(rabbit_node *node)
+{
+  return preorder_label(node->index, node->mesh->config.max_depth, 3);
+}
+
+uint64_t preorder_label(int index[4], int max_depth, int r)
 /*
  * Return the order in which a given node is visited in a preorder traversal of
- * a fully fleshed out tree having arbitrary max_depth and branching ratio m=8
+ * a fully fleshed out tree having arbitrary max_depth and branching ratio m=2^r
+ * where r=1,2,3
  */
 {
-  int r = 3;
   int m = 1 << r; // branching ratio
   int d, n, h, nb, sd, Md, adding, label=0;
-  uint64_t index = interleave_bits3(node->index[1],
-                                    node->index[2],
-                                    node->index[3]);
+  uint64_t morton;
 
-  for (d=0; d<node->index[0]; ++d) {
+  switch (r) {
+  case 1: morton = index[1]; break;
+  case 2: morton = interleave_bits2(index[1], index[2]); break;
+  case 3: morton = interleave_bits3(index[1], index[2], index[3]); break;
+  default: morton = 0;
+  }
 
-    n = node->index[0] - d - 1; // bit
-    h = node->mesh->config.max_depth - d - 1;
-    nb = 1 << (3*n);
-    sd = (index / nb) % m;
+  for (d=0; d<index[0]; ++d) {
+    n = index[0] - d - 1; // bit
+    h = max_depth - d - 1;
+    nb = 1 << (r*n);
+    sd = (morton / nb) % m;
     Md = tree_size_atlevel(r, h);
     adding = sd * Md + 1;
     label += adding;
-
   }
 
   return label;
@@ -700,6 +744,23 @@ uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
     label += ((a >> n) & 1) << (3*n + 0);
     label += ((b >> n) & 1) << (3*n + 1);
     label += ((c >> n) & 1) << (3*n + 2);
+  }
+
+  return label;
+}
+
+uint64_t interleave_bits2(uint64_t a, uint64_t b)
+/*
+ * Create a 64-bit integer by interleaving the bits of the 32-bit integers a and
+ * b
+ */
+{
+  int n;
+  uint64_t label = 0;
+
+  for (n=0; n<32; ++n) {
+    label += ((a >> n) & 1) << (2*n + 0);
+    label += ((b >> n) & 1) << (2*n + 1);
   }
 
   return label;
@@ -828,13 +889,13 @@ void write_meshes()
   /* write a uniform-depth 2d mesh */
   int I[4] = { 0, 0, 0, 0 };
   int i,j;
-  int D = 3;
+  int d = 3;
   rabbit_cfg config = { 10, 4, 4, 4 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
 
-  for (i=0; i<(1<<D); ++i) {
-    for (j=0; j<(1<<D); ++j) {
-      I[0] = D;
+  for (i=0; i<(1<<d); ++i) {
+    for (j=0; j<(1<<d); ++j) {
+      I[0] = d;
       I[1] = i;
       I[2] = j;
       I[3] = 0;
@@ -856,20 +917,20 @@ int main()
   rabbit_node *node;
   int I[4] = { 0, 0, 0, 0 };
   int i,j,k;
-  int D = 5;
+  int d = 5;
 
-  for (i=0; i<(1<<D); ++i) {
-    for (j=0; j<(1<<D); ++j) {
-      for (k=0; k<(1<<D); ++k) {
-        I[0] = D;
+  for (i=0; i<(1<<d); ++i) {
+    for (j=0; j<(1<<d); ++j) {
+      for (k=0; k<(1<<d); ++k) {
+        I[0] = d;
         I[1] = i;
         I[2] = j;
         I[3] = k;
         node = rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
-	node->data[0] = 0.0;
-	node->data[1] = 0.1;
-	node->data[2] = 0.2;
-	node->data[3] = 0.3;
+        node->data[0] = 0.0;
+        node->data[1] = 0.1;
+        node->data[2] = 0.2;
+        node->data[3] = 0.3;
       }
     }
   }
@@ -880,6 +941,10 @@ int main()
 
   TIME(
        HASH_SRT(hh, mesh->nodes, node_preorder_compare)
+       );
+
+  TIME(
+       HASH_SRT(hh, mesh->faces, face_contiguous_compare)
        );
 
   TIME(
@@ -897,4 +962,3 @@ int main()
 }
 
 #endif // RABBIT_LIB
-
