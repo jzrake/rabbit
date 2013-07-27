@@ -243,19 +243,37 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
   HASH_ITER(hh, M->faces, face, tmp_face) {
 
+    int vertices[12];
+    int index[3];
+    int axis, depth;
+    int height;
+    int ax0, ax1, ax2;
+
+    rabbit_face_geom(face, vertices, &axis, &depth);
+
+    ax0 = axis;
+    ax1 = (ax0 + 1) % 3;
+    ax2 = (ax0 + 2) % 3;
+    height = M->config.max_depth - depth - 1;
+
+    index[0] = depth;
+    index[1] = ((face->rnp[ax1] >> height) - 1) >> 1;
+    index[2] = ((face->rnp[ax2] >> height) - 1) >> 1;
+
     MSG(1, "checking face %d", iter++);
 
     if (last_face != NULL) {
       if (face_contains(last_face, face)) {
 
         HASH_DEL(M->faces, last_face);
-        MSG(0, "removing duplicate face %d", removed++);
+        MSG(1, "removing duplicate face %d", removed++);
 
         free(last_face->data);
         free(last_face);
       }
     }
     last_face = face;
+
   }
 
 
@@ -592,7 +610,7 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 
   /* orientation (x, y, z) - directed */
   if (A_axis != B_axis) {
-    return B_axis - A_axis;
+    return A_axis - B_axis;
   }
 
   ax0 = A_axis;
@@ -601,7 +619,7 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 
   /* coordinate along face normal */
   if (A->rnp[ax0] != B->rnp[ax0]) {
-    return B->rnp[ax0] - A->rnp[ax0];
+    return A->rnp[ax0] - B->rnp[ax0];
   }
 
   A_index[0] = A_depth;
@@ -616,7 +634,7 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
   A_label = preorder_label(A_index, A->mesh->config.max_depth, 2);
   B_label = preorder_label(B_index, B->mesh->config.max_depth, 2);
 
-  return B_label - A_label;
+  return A_label - B_label;
 }
 
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
@@ -646,27 +664,27 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
 
   /* orientation (x, y, z) - directed */
   if (axis_a != axis_b) {
-    return axis_b - axis_a;
+    return axis_a - axis_b;
   }
 
   /* coordinate of next axis */
   if (A->vertices[ax1] != B->vertices[ax1]) {
-    return B->vertices[ax1] - A->vertices[ax1];
+    return A->vertices[ax1] - B->vertices[ax1];
   }
 
   /* coordinate of next axis */
   if (A->vertices[ax2] != B->vertices[ax2]) {
-    return B->vertices[ax2] - A->vertices[ax2];
+    return A->vertices[ax2] - B->vertices[ax2];
   }
 
   /* left endpoint of segment along its own axis */
   if (A->vertices[ax0] != B->vertices[ax0]) {
-    return B->vertices[ax0] - A->vertices[ax0];
+    return A->vertices[ax0] - B->vertices[ax0];
   }
 
   /* depth of segment */
   if (depth_a != depth_b) {
-    return depth_b - depth_a;
+    return depth_a - depth_b;
   }
 
   return 0;
@@ -946,7 +964,7 @@ static void sanity_tests()
 void write_meshes()
 {
   /* write a uniform-depth 2d mesh */
-  if (1) {
+  if (0) {
     int I[4] = { 0, 0, 0, 0 };
     int i,j;
     int d = 3;
@@ -998,6 +1016,7 @@ void write_meshes()
     }
 
     rabbit_mesh_build(mesh);
+    ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_FACE), 66);
     rabbit_mesh_dump(mesh, "rabbit-3d.mesh");
     rabbit_mesh_del(mesh);
   }
