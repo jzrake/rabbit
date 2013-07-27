@@ -38,6 +38,10 @@ void         rabbit_mesh_build(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 rabbit_mesh *rabbit_mesh_load(char *fname);
 
+void rabbit_face_vertices(rabbit_face *F, int vertices[12]);
+void rabbit_edge_vertices(rabbit_edge *E, int vertices[6]);
+
+
 
 /* ------------------------------------------------------------------
  * RABBIT INTERNALS
@@ -124,6 +128,7 @@ struct rabbit_node {
 struct rabbit_face {
   int rnp[3]; // rational number position
   double *data;
+  rabbit_mesh *mesh;
   UT_hash_handle hh;
 } ;
 

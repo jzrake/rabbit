@@ -455,6 +455,76 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   return M;
 }
 
+void rabbit_face_vertices(rabbit_face *F, int vertices[12])
+/*
+ * Return the rational number position a face's vertices in counter-clockwise
+ * order.
+ *
+ * Faces are keyed by their rational number position (rnp), three integers
+ * labeling the coordinates of the face's center. The depth and orientation of
+ * the face are inferred from the least significant active bit in the rnp.
+ *
+ */
+{
+  int D = F->mesh->config.max_depth;
+  int H[3] = { 0, 0, 0 }; // height
+
+  while (((F->rnp[0] >> H[0]) & 1) == 0 && H[0] < D) ++H[0];
+  while (((F->rnp[1] >> H[1]) & 1) == 0 && H[1] < D) ++H[1];
+  while (((F->rnp[2] >> H[2]) & 1) == 0 && H[2] < D) ++H[2];
+
+  if (H[1] == H[2]) { /* x-directed face */
+    vertices[ 0] = F->rnp[0];
+    vertices[ 1] = F->rnp[1] - (1 << H[1]);
+    vertices[ 2] = F->rnp[2] - (1 << H[1]);
+
+    vertices[ 3] = F->rnp[0];
+    vertices[ 4] = F->rnp[1] + (1 << H[1]);
+    vertices[ 5] = F->rnp[2] - (1 << H[1]);
+
+    vertices[ 6] = F->rnp[0];
+    vertices[ 7] = F->rnp[1] + (1 << H[1]);
+    vertices[ 8] = F->rnp[2] + (1 << H[1]);
+
+    vertices[ 9] = F->rnp[0];
+    vertices[10] = F->rnp[1] - (1 << H[1]);
+    vertices[11] = F->rnp[2] + (1 << H[1]);
+  }
+  if (H[2] == H[0]) { /* y-directed face */
+    vertices[ 0] = F->rnp[0] - (1 << H[2]);
+    vertices[ 1] = F->rnp[1];
+    vertices[ 2] = F->rnp[2] - (1 << H[2]);
+    vertices[ 3] = F->rnp[0] - (1 << H[2]);
+    vertices[ 4] = F->rnp[1];
+    vertices[ 5] = F->rnp[2] + (1 << H[2]);
+    vertices[ 6] = F->rnp[0] + (1 << H[2]);
+    vertices[ 7] = F->rnp[1];
+    vertices[ 8] = F->rnp[2] + (1 << H[2]);
+    vertices[ 9] = F->rnp[0] + (1 << H[2]);
+    vertices[10] = F->rnp[1];
+    vertices[11] = F->rnp[2] - (1 << H[2]);
+  }
+  if (H[0] == H[1]) { /* z-directed face */
+    vertices[ 0] = F->rnp[0] - (1 << H[0]);
+    vertices[ 1] = F->rnp[1] - (1 << H[0]);
+    vertices[ 2] = F->rnp[2];
+    vertices[ 3] = F->rnp[0] + (1 << H[0]);
+    vertices[ 4] = F->rnp[1] - (1 << H[0]);
+    vertices[ 5] = F->rnp[2];
+    vertices[ 6] = F->rnp[0] + (1 << H[0]);
+    vertices[ 7] = F->rnp[1] + (1 << H[0]);
+    vertices[ 8] = F->rnp[2];
+    vertices[ 9] = F->rnp[0] - (1 << H[0]);
+    vertices[10] = F->rnp[1] + (1 << H[0]);
+    vertices[11] = F->rnp[2];
+  }
+}
+
+void rabbit_edge_vertices(rabbit_edge *E, int vertices[6])
+{
+  memcpy(vertices, E->vertices, 6 * sizeof(int));
+}
+
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
 {
   int n, len_a, len_b, axis_a, axis_b, depth_a=0, depth_b=0;
@@ -677,6 +747,43 @@ static void sanity_tests()
     ASSERTEQI(rabbit_mesh_count(mesh1, RABBIT_EDGE), 4);   // 4 overlapping edges
     rabbit_mesh_del(mesh0);
     rabbit_mesh_del(mesh1);
+  }
+  if (1) {
+    int D=10, d=1, i=1, j=0, k=0;
+    int vertices[12];
+    rabbit_cfg config = { D, 4, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
+    rabbit_face F;
+    F.mesh = mesh;
+
+    /* y
+     * ^
+     * -------------
+     * |     |  |  |
+     * |     |-----|
+     * |     |  |  |
+     * -------------
+     * |     |     |
+     * |     |  o  | <--- face with rnp (3/4, 1/4, 0)
+     * |     |     |      left z-face of node at depth 1: (1, 0, 0)
+     * z------------> x
+     */
+
+    F.rnp[0] = (2 * i + 1) << (D - d - 1); // formula for rnp of left z-face
+    F.rnp[1] = (2 * j + 1) << (D - d - 1);
+    F.rnp[2] = (2 * k + 0) << (D - d - 1);
+
+    rabbit_face_vertices(&F, vertices);
+
+    ASSERTEQI(vertices[0], (2 * i + 0) << (D - d - 1));
+    ASSERTEQI(vertices[1], (2 * j + 0) << (D - d - 1));
+    ASSERTEQI(vertices[2], (2 * k + 0) << (D - d - 1));
+
+    ASSERTEQI(vertices[3], (2 * i + 2) << (D - d - 1));
+    ASSERTEQI(vertices[4], (2 * j + 0) << (D - d - 1));
+    ASSERTEQI(vertices[5], (2 * k + 0) << (D - d - 1));
+
+    rabbit_mesh_del(mesh);
   }
 }
 
