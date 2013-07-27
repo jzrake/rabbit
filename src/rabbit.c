@@ -248,15 +248,16 @@ void rabbit_mesh_build(rabbit_mesh *M)
     if (last_face != NULL) {
       if (face_contains(last_face, face)) {
 
-        HASH_DEL(M->edges, last_face);
+        HASH_DEL(M->faces, last_face);
         MSG(0, "removing duplicate face %d", removed++);
 
-        free(face->data);
-        free(face);
+        free(last_face->data);
+        free(last_face);
       }
     }
     last_face = face;
   }
+
 
   int vertices[8][3];
   int start[3][4] = {{0, 2, 4, 6},
@@ -372,11 +373,11 @@ void rabbit_mesh_build(rabbit_mesh *M)
     if (last_edge != NULL) {
       if (edge_contains(last_edge, edge)) {
 
-        HASH_DEL(M->edges, last_edge);
+	HASH_DEL(M->edges, last_edge);
         MSG(2, "removing duplicate edge %d", removed++);
 
-        free(edge->data);
-        free(edge);
+        free(last_edge->data);
+        free(last_edge);
       }
     }
     last_edge = edge;
@@ -700,9 +701,9 @@ int face_contains(rabbit_face *A, rabbit_face *B)
   }
 
   return (A_vertices[3*0 + ax1] <= B_vertices[3*0 + ax1] &&
-	  A_vertices[3*0 + ax2] <= B_vertices[3*0 + ax2] &&
-	  A_vertices[3*2 + ax1] >= B_vertices[3*2 + ax1] &&
-	  A_vertices[3*2 + ax2] >= B_vertices[3*2 + ax2]);
+          A_vertices[3*0 + ax2] <= B_vertices[3*0 + ax2] &&
+          A_vertices[3*2 + ax1] >= B_vertices[3*2 + ax1] &&
+          A_vertices[3*2 + ax2] >= B_vertices[3*2 + ax2]);
 }
 
 int edge_contains(rabbit_edge *A, rabbit_edge *B)
@@ -945,24 +946,61 @@ static void sanity_tests()
 void write_meshes()
 {
   /* write a uniform-depth 2d mesh */
-  int I[4] = { 0, 0, 0, 0 };
-  int i,j;
-  int d = 3;
-  rabbit_cfg config = { 10, 4, 4, 4 };
-  rabbit_mesh *mesh = rabbit_mesh_new(config);
+  if (1) {
+    int I[4] = { 0, 0, 0, 0 };
+    int i,j;
+    int d = 3;
+    rabbit_cfg config = { 10, 4, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
 
-  for (i=0; i<(1<<d); ++i) {
-    for (j=0; j<(1<<d); ++j) {
-      I[0] = d;
-      I[1] = i;
-      I[2] = j;
-      I[3] = 0;
-      rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+    for (i=0; i<(1<<d); ++i) {
+      for (j=0; j<(1<<d); ++j) {
+        I[0] = d;
+        I[1] = i;
+        I[2] = j;
+        I[3] = 0;
+        rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+      }
     }
+    rabbit_mesh_build(mesh);
+    rabbit_mesh_dump(mesh, "rabbit-2d.mesh");
+    rabbit_mesh_del(mesh);
   }
-  rabbit_mesh_build(mesh);
-  rabbit_mesh_dump(mesh, "rabbit-2d.mesh");
-  rabbit_mesh_del(mesh);
+  if (1) {
+    rabbit_cfg config = { 10, 4, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
+    int I[4] = { 0, 0, 0, 0 };
+    int i,j,k;
+
+    for (i=0; i<2; ++i) {
+      for (j=0; j<2; ++j) {
+	for (k=0; k<2; ++k) {
+	  if (i==0 && j==0 && k==0) continue;
+	  I[0] = 1;
+	  I[1] = i;
+	  I[2] = j;
+	  I[3] = k;
+	  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+	}
+      }
+    }
+
+    for (i=0; i<2; ++i) {
+      for (j=0; j<2; ++j) {
+	for (k=0; k<2; ++k) {
+	  I[0] = 2;
+	  I[1] = i;
+	  I[2] = j;
+	  I[3] = k;
+	  rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
+	}
+      }
+    }
+
+    rabbit_mesh_build(mesh);
+    rabbit_mesh_dump(mesh, "rabbit-3d.mesh");
+    rabbit_mesh_del(mesh);
+  }
 }
 
 int main()
