@@ -22,7 +22,9 @@ static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
 //static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
+static int      face_contiguous_compare(rabbit_face *A, rabbit_face *B);
 static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
+static int      face_contains(rabbit_face *A, rabbit_face *B);
 static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
 
 /*
@@ -198,11 +200,12 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
 void rabbit_mesh_build(rabbit_mesh *M)
 {
   rabbit_node *node, *tmp_node;
+  rabbit_face *face, *tmp_face, *last_face, *existing_face;
   rabbit_edge *edge, *tmp_edge, *last_edge, *existing_edge;
-  rabbit_face *face;
 
   int face_rnp[3];
   int LR, a, h;
+  int iter, removed;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
@@ -216,9 +219,9 @@ void rabbit_mesh_build(rabbit_mesh *M)
         face_rnp[2] = (2 * node->index[3] + 1) << h;
         face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << h;
 
-        HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
+        HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), existing_face);
 
-        if (face == NULL) {
+        if (existing_face == NULL) {
 
           face = (rabbit_face*) malloc(sizeof(rabbit_face));
           face->mesh = M;
@@ -231,7 +234,29 @@ void rabbit_mesh_build(rabbit_mesh *M)
     }
   }
 
+  last_face = NULL;
+  face = NULL;
+  iter = 0;
+  removed = 0;
 
+  HASH_SRT(hh, M->faces, face_contiguous_compare);
+
+  HASH_ITER(hh, M->faces, face, tmp_face) {
+
+    MSG(1, "checking face %d", iter++);
+
+    if (last_face != NULL) {
+      if (face_contains(last_face, face)) {
+
+        HASH_DEL(M->edges, last_face);
+        MSG(0, "removing duplicate face %d", removed++);
+
+        free(face->data);
+        free(face);
+      }
+    }
+    last_face = face;
+  }
 
   int vertices[8][3];
   int start[3][4] = {{0, 2, 4, 6},
@@ -332,14 +357,13 @@ void rabbit_mesh_build(rabbit_mesh *M)
     }
   }
 
-  HASH_SRT(hh, M->edges, edge_contiguous_compare);
 
   last_edge = NULL;
   edge = NULL;
+  iter = 0;
+  removed = 0;
 
-  int iter = 0;
-  int removed = 0;
-
+  HASH_SRT(hh, M->edges, edge_contiguous_compare);
 
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
@@ -645,6 +669,40 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
   }
 
   return 0;
+}
+
+int face_contains(rabbit_face *A, rabbit_face *B)
+/*
+ * Return true if face A contains face B
+ */
+{
+  int A_vertices[12];
+  int B_vertices[12];
+  int A_axis;
+  int B_axis;
+  int A_depth;
+  int B_depth;
+  int ax0, ax1, ax2;
+
+  rabbit_face_geom(A, A_vertices, &A_axis, &A_depth);
+  rabbit_face_geom(B, B_vertices, &B_axis, &B_depth);
+
+  ax0 = A_axis;
+  ax1 = (ax0 + 1) % 3;
+  ax2 = (ax0 + 2) % 3;
+
+  if (A_axis != B_axis) {
+    return 0;
+  }
+
+  if (A->rnp[ax0] != B->rnp[ax0]) {
+    return 0;
+  }
+
+  return (A_vertices[3*0 + ax1] <= B_vertices[3*0 + ax1] &&
+	  A_vertices[3*0 + ax2] <= B_vertices[3*0 + ax2] &&
+	  A_vertices[3*2 + ax1] >= B_vertices[3*2 + ax1] &&
+	  A_vertices[3*2 + ax2] >= B_vertices[3*2 + ax2]);
 }
 
 int edge_contains(rabbit_edge *A, rabbit_edge *B)
