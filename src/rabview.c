@@ -18,8 +18,9 @@ static double RotationZ = 0.0;
 
 #define RABBIT_INTERNAL
 #include "rabbit.h"
-static rabbit_mesh *Mesh;
 
+static rabbit_mesh *Mesh;
+static double MeshCentroid[3];
 
 int main(int argc, char **argv)
 {
@@ -30,6 +31,33 @@ int main(int argc, char **argv)
   }
   else {
     Mesh = rabbit_mesh_load(argv[1]);
+
+    rabbit_geom geom;
+    rabbit_node *node, *tmp_node;
+    double tot_vol = 0.0;
+    int num_nodes = 0;
+    int D = Mesh->config.max_depth;
+
+    HASH_ITER(hh, Mesh->nodes, node, tmp_node) {
+
+      geom = rabbit_mesh_geom(Mesh, node->rnp);
+
+      double dx = 1.0 / (1 << geom.index[0]);
+      double dy = 1.0 / (1 << geom.index[0]);
+      double dz = 1.0 / (1 << geom.index[0]);
+      double vol = dx * dy * dz;
+
+      MeshCentroid[0] += node->rnp[0] * vol / (1 << D);
+      MeshCentroid[1] += node->rnp[1] * vol / (1 << D);
+      MeshCentroid[2] += node->rnp[2] * vol / (1 << D);
+
+      tot_vol += vol;
+      num_nodes += 1;
+    }
+
+    MeshCentroid[0] /= tot_vol;
+    MeshCentroid[1] /= tot_vol;
+    MeshCentroid[2] /= tot_vol;
   }
 
   glutInit(&argc, argv);
@@ -77,19 +105,13 @@ void GLUTDisplayFunc()
 
       geom = rabbit_mesh_geom(Mesh, edge->rnp);
 
-      double x0 = geom.vertices[0] / C - 0.5;
-      double y0 = geom.vertices[1] / C - 0.5;
-      double z0 = geom.vertices[2] / C - 0.5;
-      double x1 = geom.vertices[3] / C - 0.5;
-      double y1 = geom.vertices[4] / C - 0.5;
-      double z1 = geom.vertices[5] / C - 0.5;
-      /*
-      double r2 = sqrt((x0 + x1) * (x0 + x1) +
-		       (y0 + y1) * (y0 + y1) +
-		       (z0 + z1) * (z0 + z1)) * 0.5;
+      double x0 = geom.vertices[0] / C - MeshCentroid[0];
+      double y0 = geom.vertices[1] / C - MeshCentroid[1];
+      double z0 = geom.vertices[2] / C - MeshCentroid[2];
+      double x1 = geom.vertices[3] / C - MeshCentroid[0];
+      double y1 = geom.vertices[4] / C - MeshCentroid[1];
+      double z1 = geom.vertices[5] / C - MeshCentroid[2];
 
-      if (r2 < 0.5)
-      */
       glVertex3d(x0, y0, z0);
       glVertex3d(x1, y1, z1);
     }
