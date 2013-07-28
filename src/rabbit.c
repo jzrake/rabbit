@@ -33,6 +33,17 @@ static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
 #define tree_size_atlevel(r, n) ((1 << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
 
 
+
+/*
+ * /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+ *
+ *
+ *                       PUBLIC FUNCTIONS IMPLEMENTATION
+ *
+ *
+ * \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+ */
+
 rabbit_mesh *rabbit_mesh_new(rabbit_cfg cfg)
 {
   rabbit_mesh *M = (rabbit_mesh*) malloc(sizeof(rabbit_mesh));
@@ -660,8 +671,8 @@ int64_t node_preorder_compare(rabbit_node *A, rabbit_node *B)
 
 int64_t face_preorder_compare(rabbit_face *A, rabbit_face *B)
 {
-  int A_label;
-  int B_label;
+  uint64_t A_label;
+  uint64_t B_label;
   int ax0, ax1, ax2;
 
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
@@ -697,14 +708,14 @@ int64_t edge_preorder_compare(rabbit_edge *A, rabbit_edge *B)
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
-  ax0 = A_geom.axis;
-  ax1 = (ax0 + 1) % 3; // only used if axis_a == axis_b
-  ax2 = (ax0 + 2) % 3;
-
   /* orientation (x, y, z) - directed */
   if (A_geom.axis != B_geom.axis) {
     return A_geom.axis - B_geom.axis;
   }
+
+  ax0 = A_geom.axis;
+  ax1 = (ax0 + 1) % 3;
+  ax2 = (ax0 + 2) % 3;
 
   /* coordinate of next axis */
   if (A->rnp[ax1] != B->rnp[ax1]) {
@@ -956,6 +967,37 @@ static void sanity_tests()
     ASSERTEQI(geom.axis, 0);
     ASSERTEQI(geom.index[0], 0);
 
+    rabbit_mesh_del(mesh);
+  }
+  if (1) {
+    /* ensure that preorder labels respect periodic mesh */
+    int D = 4;
+    rabbit_cfg config = { D, 4, 4, 4 };
+    rabbit_mesh *mesh = rabbit_mesh_new(config);
+    rabbit_node *n1, *n2;
+    rabbit_geom g1, g2;
+    int index[4];
+
+    index[0] = 2;
+    index[1] = -1;
+    index[2] = -1;
+    index[3] = -1;
+    n1 = rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+    g1 = rabbit_mesh_geom(mesh, n1->rnp);
+
+    index[0] = 2;
+    index[1] = 3;
+    index[2] = 3;
+    index[3] = 3;
+    n2 = rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+    g2 = rabbit_mesh_geom(mesh, n2->rnp);
+
+    int L1 = preorder_label(g1.index, D, 3);
+    int L2 = preorder_label(g2.index, D, 3);
+    ASSERTEQI(L1, L2);
+
+    rabbit_mesh_build(mesh);
+    rabbit_mesh_dump(mesh, "rabbit-guard.mesh");
     rabbit_mesh_del(mesh);
   }
 }
