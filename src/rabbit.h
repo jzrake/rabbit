@@ -15,6 +15,7 @@
 #define RABBIT_NODE     (1 << 5)
 #define RABBIT_FACE     (1 << 6)
 #define RABBIT_EDGE     (1 << 7)
+#define RABBIT_RNP      (1 << 8)
 
 typedef struct rabbit_mesh rabbit_mesh;
 typedef struct rabbit_node rabbit_node;
@@ -125,7 +126,7 @@ struct rabbit_mesh {
 } ;
 
 struct rabbit_node {
-  int index[4]; // (depth, i, j, k)
+  int rnp[3];
   int flags;
   double *data;
   rabbit_mesh *mesh;

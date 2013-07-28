@@ -73,8 +73,22 @@ void rabbit_mesh_del(rabbit_mesh *M)
 rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
 {
   rabbit_node *node;
+  int rnp[3];
+  int h;
 
-  HASH_FIND(hh, M->nodes, index, 4 * sizeof(int), node);
+  if (flags & RABBIT_RNP) {
+    rnp[0] = index[0];
+    rnp[1] = index[1];
+    rnp[2] = index[2];
+  }
+  else {
+   h = M->config.max_depth - index[0] - 1;
+   rnp[0] = (2 * index[1] + 1) << h;
+   rnp[1] = (2 * index[2] + 1) << h;
+   rnp[2] = (2 * index[3] + 1) << h;
+  }
+
+  HASH_FIND(hh, M->nodes, rnp, 3 * sizeof(int), node);
 
   if (node != NULL) {
     return node;
@@ -84,9 +98,9 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
     node->flags = flags & (RABBIT_ACTIVE | RABBIT_GHOST);
     node->mesh = M;
     node->data = (double*) calloc(M->config.doubles_per_node, sizeof(double));
-    memcpy(node->index, index, 4 * sizeof(int));
+    memcpy(node->rnp, rnp, 3 * sizeof(int));
 
-    HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
+    HASH_ADD(hh, M->nodes, rnp, 3 * sizeof(int), node);
 
     return node;
   }
@@ -95,8 +109,14 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
 rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int index[4])
 {
   rabbit_node *node;
+  int h = M->config.max_depth - index[0] - 1;
+  int rnp[3];
 
-  HASH_FIND(hh, M->nodes, index, 4 * sizeof(int), node);
+  rnp[0] = (2 * index[1] + 1) << h;
+  rnp[1] = (2 * index[2] + 1) << h;
+  rnp[2] = (2 * index[3] + 1) << h;
+
+  HASH_FIND(hh, M->nodes, rnp, 3 * sizeof(int), node);
 
   return node;
 }
@@ -104,8 +124,14 @@ rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int index[4])
 rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int index[4])
 {
   rabbit_node *node;
+  int h = M->config.max_depth - index[0] - 1;
+  int rnp[3];
 
-  HASH_FIND(hh, M->nodes, index, 4 * sizeof(int), node);
+  rnp[0] = (2 * index[1] + 1) << h;
+  rnp[1] = (2 * index[2] + 1) << h;
+  rnp[2] = (2 * index[3] + 1) << h;
+
+  HASH_FIND(hh, M->nodes, rnp, 3 * sizeof(int), node);
 
   if (node != NULL) {
     HASH_DEL(M->nodes, node);
@@ -298,10 +324,10 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
   }
 
   HASH_ITER(hh, N->nodes, node, tmp_node) {
-    HASH_FIND(hh, M->nodes, node->index, 4 * sizeof(int), rpl_node);
+    HASH_FIND(hh, M->nodes, node->rnp, 3 * sizeof(int), rpl_node);
     if (rpl_node == NULL) {
       HASH_DEL(N->nodes, node);
-      HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
+      HASH_ADD(hh, M->nodes, rnp, 3 * sizeof(int), node);
     }
   }
 
@@ -330,20 +356,20 @@ void rabbit_mesh_build(rabbit_mesh *M)
   rabbit_edge *edge, *tmp_edge, *last_edge;
 
   int face_rnp[3];
+  int edge_rnp[3];
   int LR, a, h;
   int iter, removed;
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    h = M->config.max_depth - node->index[0] - 1;
+    rabbit_geom geom = rabbit_mesh_geom(M, node->rnp);
+    h = M->config.max_depth - geom.index[0] - 1;
 
     for (LR=0; LR<=1; ++LR) {
       for (a=0; a<3; ++a) {
 
-        face_rnp[0] = (2 * node->index[1] + 1) << h;
-        face_rnp[1] = (2 * node->index[2] + 1) << h;
-        face_rnp[2] = (2 * node->index[3] + 1) << h;
-        face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << h;
+	memcpy(face_rnp, node->rnp, 3 * sizeof(int));
+	face_rnp[a] += (LR == 0 ? -1 : +1) << h;
 
         HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
 
@@ -384,28 +410,27 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
-    int rnp[3];
     int ax0, ax1, ax2;
     int i, j;
 
-    h = M->config.max_depth - node->index[0] - 1;
+    rabbit_geom geom = rabbit_mesh_geom(M, node->rnp);
+    h = M->config.max_depth - geom.index[0] - 1;
 
     for (a=0; a<3; ++a) {
+
+      ax0 = (a + 0) % 3;
+      ax1 = (a + 1) % 3;
+      ax2 = (a + 2) % 3;
+
       for (i=0; i<=1; ++i) {
 	for (j=0; j<=1; ++j) {
 
-	  rnp[0] = (2*node->index[1] + 1) << h;
-	  rnp[1] = (2*node->index[2] + 1) << h;
-	  rnp[2] = (2*node->index[3] + 1) << h;
+          memcpy(edge_rnp, node->rnp, 3 * sizeof(int));
 
-	  ax0 = (a + 0) % 3;
-	  ax1 = (a + 1) % 3;
-	  ax2 = (a + 2) % 3;
+	  edge_rnp[ax1] += (1 << h) * (i==0 ? -1 : +1);
+	  edge_rnp[ax2] += (1 << h) * (j==0 ? -1 : +1);
 
-	  rnp[ax1] += (1 << h) * (i==0 ? -1 : +1);
-	  rnp[ax2] += (1 << h) * (j==0 ? -1 : +1);
-
-	  HASH_FIND(hh, M->edges, rnp, 3 * sizeof(int), edge);
+	  HASH_FIND(hh, M->edges, edge_rnp, 3 * sizeof(int), edge);
 
 	  if (edge == NULL) {
 
@@ -414,7 +439,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 	    edge->data = (double*) calloc(M->config.doubles_per_edge,
 					  sizeof(double));
 
-	    memcpy(edge->rnp, rnp, 3 * sizeof(int));
+	    memcpy(edge->rnp, edge_rnp, 3 * sizeof(int));
 	    HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
 	  }
 	}
@@ -450,7 +475,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
 {
   int n;
-  int I[4], V[3];
+  int rnp[3];
   rabbit_cfg config_val;
   double node_data_val;
   double edge_data_val;
@@ -458,16 +483,16 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   rabbit_edge *edge, *tmp_edge;
   tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
                          &config_val,     // 0
-                         I, 4,            // 1
+                         rnp, 3,          // 1
                          &node_data_val,  // 2
-                         V, 3,            // 3
+                         rnp, 3,          // 3
                          &edge_data_val); // 4
 
   config_val = M->config;
   tpl_pack(tn, 0);
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
-    memcpy(I, node->index, 4 * sizeof(int));
+    memcpy(rnp, node->rnp, 3 * sizeof(int));
 
     tpl_pack(tn, 1);
 
@@ -479,7 +504,7 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   }
 
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
-    memcpy(V, edge->rnp, 3 * sizeof(int));
+    memcpy(rnp, edge->rnp, 3 * sizeof(int));
 
     tpl_pack(tn, 3);
 
@@ -499,7 +524,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   rabbit_mesh *M;
 
   int n;
-  int I[4], V[3];
+  int rnp[3];
   rabbit_cfg config_val;
   double node_data_val;
   double edge_data_val;
@@ -507,9 +532,9 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   rabbit_edge *edge;
   tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
                          &config_val,     // 0
-                         I, 4,            // 1
+                         rnp, 3,          // 1
                          &node_data_val,  // 2
-                         V, 3,            // 3
+                         rnp, 3,          // 3
                          &edge_data_val); // 4
 
   tpl_load(tn, TPL_FILE, fname);
@@ -518,7 +543,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   M = rabbit_mesh_new(config_val);
 
   while (tpl_unpack(tn, 1) > 0) {
-    node = rabbit_mesh_putnode(M, I, RABBIT_ACTIVE);
+    node = rabbit_mesh_putnode(M, rnp, RABBIT_ACTIVE | RABBIT_RNP);
 
     tpl_unpack(tn, 1); // unpack data array
 
@@ -533,7 +558,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
     edge->mesh = M;
     edge->data = (double*) calloc(M->config.doubles_per_edge,
                                   sizeof(double));
-    memcpy(edge->rnp, V, 3 * sizeof(int));
+    memcpy(edge->rnp, rnp, 3 * sizeof(int));
 
     tpl_unpack(tn, 3); // unpack data array
 
@@ -625,8 +650,10 @@ uint64_t preorder_label(int index[4], int max_depth, int r)
 
 int64_t node_preorder_compare(rabbit_node *A, rabbit_node *B)
 {
-  return (preorder_label(A->index, A->mesh->config.max_depth, 3) - 
-	  preorder_label(B->index, B->mesh->config.max_depth, 3));
+  rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
+  rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
+  return (preorder_label(A_geom.index, A->mesh->config.max_depth, 3) - 
+	  preorder_label(B_geom.index, B->mesh->config.max_depth, 3));
 }
 
 int64_t face_preorder_compare(rabbit_face *A, rabbit_face *B)
