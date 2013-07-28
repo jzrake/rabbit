@@ -21,7 +21,7 @@ static uint64_t preorder_label(int index[4], int max_depth, int r);
 static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
-//static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
+static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
 static int      face_contiguous_compare(rabbit_face *A, rabbit_face *B);
 static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
 static int      face_contains(rabbit_face *A, rabbit_face *B);
@@ -204,8 +204,8 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
     ax1 = (ax0 + 1) % 3;
     ax2 = (ax0 + 2) % 3;
     geom.index[0] = D - H[ax1] - 1;
-    geom.index[1] = rnp[ax1] >> H[ax1];
-    geom.index[2] = rnp[ax2] >> H[ax2];
+    geom.index[1] = ((rnp[ax1] >> H[ax1]) - 1) >> 1;
+    geom.index[2] = ((rnp[ax2] >> H[ax2]) - 1) >> 1;
     geom.index[3] = 0;
   }
   else if (geom.type == RABBIT_EDGE) {
@@ -213,7 +213,7 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
     ax1 = (ax0 + 1) % 3;
     ax2 = (ax0 + 2) % 3;
     geom.index[0] = D - H[ax0] - 1;
-    geom.index[1] = rnp[ax0] >> H[ax0];
+    geom.index[1] = ((rnp[ax0] >> H[ax0]) - 1) >> 1;
     geom.index[2] = 0;
     geom.index[3] = 0;
   }
@@ -291,6 +291,7 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
  */
 {
   rabbit_node *node, *tmp_node, *rpl_node;
+  rabbit_face *face, *tmp_face, *rpl_face;
   rabbit_edge *edge, *tmp_edge, *rpl_edge;
 
   if (memcmp(&M->config, &N->config, sizeof(rabbit_cfg)) != 0) {
@@ -303,6 +304,14 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
     if (rpl_node == NULL) {
       HASH_DEL(N->nodes, node);
       HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
+    }
+  }
+
+  HASH_ITER(hh, N->faces, face, tmp_face) {
+    HASH_FIND(hh, M->faces, face->rnp, 3 * sizeof(int), rpl_face);
+    if (rpl_face == NULL) {
+      HASH_DEL(N->faces, face);
+      HASH_ADD(hh, M->faces, rnp, 3 * sizeof(int), face);
     }
   }
 
@@ -319,8 +328,8 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
 void rabbit_mesh_build(rabbit_mesh *M)
 {
   rabbit_node *node, *tmp_node;
-  rabbit_face *face, *tmp_face, *last_face, *existing_face;
-  rabbit_edge *edge, *tmp_edge, *last_edge, *existing_edge;
+  rabbit_face *face, *tmp_face, *last_face;
+  rabbit_edge *edge, *tmp_edge, *last_edge;
 
   int face_rnp[3];
   int LR, a, h;
@@ -338,9 +347,9 @@ void rabbit_mesh_build(rabbit_mesh *M)
         face_rnp[2] = (2 * node->index[3] + 1) << h;
         face_rnp[a] = (2 * node->index[a+1] + (LR == 0 ? 0 : 2)) << h;
 
-        HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), existing_face);
+        HASH_FIND(hh, M->faces, face_rnp, 3 * sizeof(int), face);
 
-        if (existing_face == NULL) {
+        if (face == NULL) {
 
           face = (rabbit_face*) malloc(sizeof(rabbit_face));
           face->mesh = M;
@@ -362,39 +371,18 @@ void rabbit_mesh_build(rabbit_mesh *M)
 
   HASH_ITER(hh, M->faces, face, tmp_face) {
 
-    int vertices[12];
-    int index[3];
-    int axis, depth;
-    int height;
-    int ax0, ax1, ax2;
-
-    rabbit_face_geom(face, vertices, &axis, &depth);
-
-    ax0 = axis;
-    ax1 = (ax0 + 1) % 3;
-    ax2 = (ax0 + 2) % 3;
-    height = M->config.max_depth - depth - 1;
-
-    index[0] = depth;
-    index[1] = ((face->rnp[ax1] >> height) - 1) >> 1;
-    index[2] = ((face->rnp[ax2] >> height) - 1) >> 1;
-
     MSG(1, "checking face %d", iter++);
 
     if (last_face != NULL) {
       if (face_contains(last_face, face)) {
-
         HASH_DEL(M->faces, last_face);
         MSG(1, "removing duplicate face %d", removed++);
-
         free(last_face->data);
         free(last_face);
       }
     }
     last_face = face;
-
   }
-
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
 
@@ -419,10 +407,9 @@ void rabbit_mesh_build(rabbit_mesh *M)
 	  rnp[ax1] += (1 << h) * (i==0 ? -1 : +1);
 	  rnp[ax2] += (1 << h) * (j==0 ? -1 : +1);
 
+	  HASH_FIND(hh, M->edges, rnp, 3 * sizeof(int), edge);
 
-	  HASH_FIND(hh, M->edges, rnp, 3 * sizeof(int), existing_edge);
-
-	  if (existing_edge == NULL) {
+	  if (edge == NULL) {
 
 	    edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
 	    edge->mesh = M;
@@ -645,30 +632,19 @@ void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth)
 
 int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 {
-  int A_index[3];
-  int B_index[3];
-  int A_depth;
-  int B_depth;
-  int A_axis;
-  int B_axis;
   int A_label;
   int B_label;
-  int A_height;
-  int B_height;
   int ax0, ax1, ax2;
 
-  rabbit_face_geom(A, NULL, &A_axis, &A_depth);
-  rabbit_face_geom(B, NULL, &B_axis, &B_depth);
-
-  A_height = A->mesh->config.max_depth - A_depth - 1;
-  B_height = B->mesh->config.max_depth - B_depth - 1;
+  rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
+  rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
   /* orientation (x, y, z) - directed */
-  if (A_axis != B_axis) {
-    return A_axis - B_axis;
+  if (A_geom.axis != B_geom.axis) {
+    return A_geom.axis - B_geom.axis;
   }
 
-  ax0 = A_axis;
+  ax0 = A_geom.axis;
   ax1 = (ax0 + 1) % 3;
   ax2 = (ax0 + 2) % 3;
 
@@ -677,17 +653,9 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
     return A->rnp[ax0] - B->rnp[ax0];
   }
 
-  A_index[0] = A_depth;
-  A_index[1] = ((A->rnp[ax1] >> A_height) - 1) >> 1;
-  A_index[2] = ((A->rnp[ax2] >> A_height) - 1) >> 1;
-
-  B_index[0] = B_depth;
-  B_index[1] = ((B->rnp[ax1] >> B_height) - 1) >> 1;
-  B_index[2] = ((B->rnp[ax2] >> B_height) - 1) >> 1;
-
   /* 2d preorder label in the plane of both faces */
-  A_label = preorder_label(A_index, A->mesh->config.max_depth, 2);
-  B_label = preorder_label(B_index, B->mesh->config.max_depth, 2);
+  A_label = preorder_label(A_geom.index, A->mesh->config.max_depth, 2);
+  B_label = preorder_label(B_geom.index, B->mesh->config.max_depth, 2);
 
   return A_label - B_label;
 }
@@ -699,7 +667,6 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
 
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
-
 
   for (n=0; n<3; ++n) {
 

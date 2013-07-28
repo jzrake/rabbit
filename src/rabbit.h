@@ -144,7 +144,7 @@ struct rabbit_face {
 } ;
 
 struct rabbit_edge {
-  int rnp[3];
+  int rnp[3]; // rational number position
   double *data;
   rabbit_mesh *mesh;
   UT_hash_handle hh;
