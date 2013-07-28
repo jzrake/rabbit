@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <GL/glut.h>
 #define ESCAPE_KEY 27
 
@@ -66,19 +67,29 @@ void GLUTDisplayFunc()
   glEnable(GL_DEPTH_TEST);
 
   if (1) {
-    double C = (double) (1 << (1 + Mesh->config.max_depth));
+    double C = (double) (1 << Mesh->config.max_depth);
     rabbit_edge *edge, *tmp_edge;
+    rabbit_geom geom;
+
     glBegin(GL_LINES);
 
     HASH_ITER(hh, Mesh->edges, edge, tmp_edge) {
 
-      double x0 = edge->vertices[0] / C - 0.5;
-      double y0 = edge->vertices[1] / C - 0.5;
-      double z0 = edge->vertices[2] / C - 0.5;
-      double x1 = edge->vertices[3] / C - 0.5;
-      double y1 = edge->vertices[4] / C - 0.5;
-      double z1 = edge->vertices[5] / C - 0.5;
+      geom = rabbit_mesh_geom(Mesh, edge->rnp);
 
+      double x0 = geom.vertices[0] / C - 0.5;
+      double y0 = geom.vertices[1] / C - 0.5;
+      double z0 = geom.vertices[2] / C - 0.5;
+      double x1 = geom.vertices[3] / C - 0.5;
+      double y1 = geom.vertices[4] / C - 0.5;
+      double z1 = geom.vertices[5] / C - 0.5;
+      /*
+      double r2 = sqrt((x0 + x1) * (x0 + x1) +
+		       (y0 + y1) * (y0 + y1) +
+		       (z0 + z1) * (z0 + z1)) * 0.5;
+
+      if (r2 < 0.5)
+      */
       glVertex3d(x0, y0, z0);
       glVertex3d(x1, y1, z1);
     }

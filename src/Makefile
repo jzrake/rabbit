@@ -1,7 +1,6 @@
 
 CFLAGS = -Wall -O0
-#EXE = rabrun rabfile rabview
-EXE = rabrun
+EXE = rabrun rabfile rabview
 
 GL_LIB = -framework OpenGL -framework GLUT
 GL_INC = -I/usr/X11R6/include

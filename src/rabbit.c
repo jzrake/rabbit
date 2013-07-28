@@ -488,6 +488,8 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
                          rnp, 3,          // 3
                          &edge_data_val); // 4
 
+  HASH_SRT(hh, M->nodes, node_preorder_compare);
+
   config_val = M->config;
   tpl_pack(tn, 0);
 
@@ -1066,7 +1068,7 @@ int main()
   MSG(0, "there are %d total nodes", rabbit_mesh_count(mesh, RABBIT_ACTIVE));
   MSG(0, "there are %d total edges", rabbit_mesh_count(mesh, RABBIT_EDGE));
 
-  rabbit_mesh_dump(mesh, "rabbit.mesh");
+  rabbit_mesh_dump(mesh, "rabbit-deep.mesh");
 
   rabbit_mesh_del(mesh);
 
