@@ -413,7 +413,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
 	    edge->mesh = M;
 	    edge->data = (double*) calloc(M->config.doubles_per_edge,
 					  sizeof(double));
-	    
+
 	    memcpy(edge->rnp, rnp, 3 * sizeof(int));
 	    HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
 	  }
@@ -601,19 +601,18 @@ uint64_t preorder_label(int index[4], int max_depth, int r)
  */
 {
   int m = 1 << r; // branching ratio
-  int d, n, h, nb, sd, Md;
-  uint64_t adding, morton, label=0;
+  int d, n, h;
+  uint64_t nb, sd, Md, adding, morton, label=0;
 
   switch (r) {
   case 1: morton = index[1]; break;
   case 2: morton = interleave_bits2(index[1], index[2]); break;
   case 3: morton = interleave_bits3(index[1], index[2], index[3]); break;
-  default: morton = 0;
   }
 
   for (d=0; d<index[0]; ++d) {
-    n = index[0] - d - 1; // bit
-    h = max_depth - d - 1;
+    n = index[0] - d - 1; // height above
+    h = max_depth - d - 1; // total height
     nb = 1 << (r*n);
     sd = (morton / nb) % m;
     Md = tree_size_atlevel(r, h);
@@ -679,13 +678,13 @@ int64_t edge_preorder_compare(rabbit_edge *A, rabbit_edge *B)
   }
 
   /* coordinate of next axis */
-  if (A_geom.vertices[ax1] != B_geom.vertices[ax1]) {
-    return A_geom.vertices[ax1] - B_geom.vertices[ax1];
+  if (A->rnp[ax1] != B->rnp[ax1]) {
+    return A->rnp[ax1] - B->rnp[ax1];
   }
 
   /* coordinate of next axis */
-  if (A_geom.vertices[ax2] != B_geom.vertices[ax2]) {
-    return A_geom.vertices[ax2] - B_geom.vertices[ax2];
+  if (A->rnp[ax2] != B->rnp[ax2]) {
+    return A->rnp[ax2] - B->rnp[ax2];
   }
 
   /* 1d preorder label on the axis of both edges */

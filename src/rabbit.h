@@ -108,7 +108,7 @@ rabbit_mesh *rabbit_mesh_load(char *fname);
  * SFH Paul Hsieh
  * MUR MurmurHash v3 (see note)
  */
-#define HASH_FUNCTION HASH_SAX
+#define HASH_FUNCTION HASH_JEN
 #include "uthash.h"
 #include "tpl.h" /* tpl file format header */
 
