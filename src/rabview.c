@@ -36,7 +36,7 @@ int main(int argc, char **argv)
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
   glutInitWindowSize(768, 768);
   glutInitWindowPosition(512, 0);
-  glutCreateWindow("GLUT Window");
+  glutCreateWindow("rabview");
   glutDisplayFunc(GLUTDisplayFunc);
   glutIdleFunc(GLUTIdleFunc);
   glutReshapeFunc(GLUTReshapeFunc);

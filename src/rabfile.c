@@ -22,11 +22,11 @@ int main(int argc, char **argv)
 
   rabbit_mesh *mesh = rabbit_mesh_load(argv[1]);
   rabbit_cfg config = mesh->config;
-  rabbit_node *node, *tmp_node;
-  rabbit_edge *edge, *tmp_edge;
-  rabbit_geom geom;
-  int n;
-  int *I, *V;
+  //  rabbit_node *node, *tmp_node;
+  //  rabbit_edge *edge, *tmp_edge;
+  //  rabbit_geom geom;
+  //  int n;
+  //  int *I, *V;
 
   printf("rabbit_cfg:\n");
   printf("  max_depth = %d\n", config.max_depth);
@@ -34,6 +34,12 @@ int main(int argc, char **argv)
   printf("  doubles_per_face = %d\n", config.doubles_per_face);
   printf("  doubles_per_edge = %d\n", config.doubles_per_edge);
 
+  printf("mesh stats:\n");
+  printf("  number of nodes = %d\n", rabbit_mesh_count(mesh, RABBIT_ACTIVE));
+  printf("  number of faces = %d\n", rabbit_mesh_count(mesh, RABBIT_FACE));
+  printf("  number of edges = %d\n", rabbit_mesh_count(mesh, RABBIT_EDGE));
+
+  /*
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
     geom = rabbit_mesh_geom(mesh, node->rnp);
     I = geom.index;
@@ -53,6 +59,7 @@ int main(int argc, char **argv)
     }
     printf("\n");
   }
+  */
 
   rabbit_mesh_del(mesh);
   return 0;

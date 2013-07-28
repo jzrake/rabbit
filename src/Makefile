@@ -1,5 +1,5 @@
 
-CFLAGS = -Wall -O0
+CFLAGS = -Wall -O3
 EXE = rabrun rabfile rabview
 
 GL_LIB = -framework OpenGL -framework GLUT

@@ -20,7 +20,7 @@
 static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
 static uint64_t preorder_label(int index[4], int max_depth, int r);
-static int64_t  node_preorder_compare(rabbit_node *A, rabbit_node *B);
+//static int64_t  node_preorder_compare(rabbit_node *A, rabbit_node *B);
 static int64_t  face_preorder_compare(rabbit_face *A, rabbit_face *B);
 static int64_t  edge_preorder_compare(rabbit_edge *A, rabbit_edge *B);
 static int      face_contains(rabbit_face *A, rabbit_face *B);
@@ -488,44 +488,50 @@ void rabbit_mesh_dump(rabbit_mesh *M, char *fname)
   int n;
   int rnp[3];
   rabbit_cfg config_val;
-  double node_data_val;
-  double edge_data_val;
+  double data_val;
   rabbit_node *node, *tmp_node;
+  rabbit_face *face, *tmp_face;
   rabbit_edge *edge, *tmp_edge;
-  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
+  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))A(i#A(f))",
                          &config_val,     // 0
-                         rnp, 3,          // 1
-                         &node_data_val,  // 2
-                         rnp, 3,          // 3
-                         &edge_data_val); // 4
-
-  HASH_SRT(hh, M->nodes, node_preorder_compare);
+                         rnp, 3,          // 1 nodes
+                         &data_val,       // 2
+                         rnp, 3,          // 3 faces
+                         &data_val,       // 4
+                         rnp, 3,          // 5 edges
+                         &data_val);      // 6
 
   config_val = M->config;
   tpl_pack(tn, 0);
 
   HASH_ITER(hh, M->nodes, node, tmp_node) {
     memcpy(rnp, node->rnp, 3 * sizeof(int));
-
     tpl_pack(tn, 1);
-
     for (n=0; n<M->config.doubles_per_node; ++n) {
-      node_data_val = node->data[n];
+      data_val = node->data[n];
       tpl_pack(tn, 2);
     }
     tpl_pack(tn, 1); // pack data array
   }
 
-  HASH_ITER(hh, M->edges, edge, tmp_edge) {
-    memcpy(rnp, edge->rnp, 3 * sizeof(int));
-
+  HASH_ITER(hh, M->faces, face, tmp_face) {
+    memcpy(rnp, face->rnp, 3 * sizeof(int));
     tpl_pack(tn, 3);
-
-    for (n=0; n<M->config.doubles_per_edge; ++n) {
-      edge_data_val = edge->data[n];
+    for (n=0; n<M->config.doubles_per_face; ++n) {
+      data_val = face->data[n];
       tpl_pack(tn, 4);
     }
     tpl_pack(tn, 3); // pack data array
+  }
+
+  HASH_ITER(hh, M->edges, edge, tmp_edge) {
+    memcpy(rnp, edge->rnp, 3 * sizeof(int));
+    tpl_pack(tn, 5);
+    for (n=0; n<M->config.doubles_per_edge; ++n) {
+      data_val = edge->data[n];
+      tpl_pack(tn, 6);
+    }
+    tpl_pack(tn, 5); // pack data array
   }
 
   tpl_dump(tn, TPL_FILE, fname);
@@ -539,16 +545,18 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   int n;
   int rnp[3];
   rabbit_cfg config_val;
-  double node_data_val;
-  double edge_data_val;
+  double data_val;
   rabbit_node *node;
+  rabbit_face *face;
   rabbit_edge *edge;
-  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))",
+  tpl_node *tn = tpl_map("S(iiii)A(i#A(f))A(i#A(f))A(i#A(f))",
                          &config_val,     // 0
-                         rnp, 3,          // 1
-                         &node_data_val,  // 2
-                         rnp, 3,          // 3
-                         &edge_data_val); // 4
+                         rnp, 3,          // 1 nodes
+                         &data_val,       // 2
+                         rnp, 3,          // 3 faces
+                         &data_val,       // 4
+                         rnp, 3,          // 5 edges
+                         &data_val);      // 6
 
   tpl_load(tn, TPL_FILE, fname);
   tpl_unpack(tn, 0);
@@ -556,28 +564,44 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   M = rabbit_mesh_new(config_val);
 
   while (tpl_unpack(tn, 1) > 0) {
-    node = rabbit_mesh_putnode(M, rnp, RABBIT_ACTIVE | RABBIT_RNP);
-
+    node = (rabbit_node*) malloc(sizeof(rabbit_node));
+    node->mesh = M;
+    node->data = (double*) calloc(M->config.doubles_per_node,
+				  sizeof(double));
+    node->flags = RABBIT_ACTIVE;
+    memcpy(node->rnp, rnp, 3 * sizeof(int));
     tpl_unpack(tn, 1); // unpack data array
-
     for (n=0; n<M->config.doubles_per_node; ++n) {
       tpl_unpack(tn, 2);
-      node->data[n] = node_data_val;
+      node->data[n] = data_val;
     }
+    HASH_ADD(hh, M->nodes, rnp, 3 * sizeof(int), node);
   }
 
   while (tpl_unpack(tn, 3) > 0) {
+    face = (rabbit_face*) malloc(sizeof(rabbit_face));
+    face->mesh = M;
+    face->data = (double*) calloc(M->config.doubles_per_face,
+				  sizeof(double));
+    memcpy(face->rnp, rnp, 3 * sizeof(int));
+    tpl_unpack(tn, 3); // unpack data array
+    for (n=0; n<M->config.doubles_per_face; ++n) {
+      tpl_unpack(tn, 4);
+      face->data[n] = data_val;
+    }
+    HASH_ADD(hh, M->faces, rnp, 3 * sizeof(int), face);
+  }
+
+  while (tpl_unpack(tn, 5) > 0) {
     edge = (rabbit_edge*) malloc(sizeof(rabbit_edge));
     edge->mesh = M;
     edge->data = (double*) calloc(M->config.doubles_per_edge,
-                                  sizeof(double));
+				  sizeof(double));
     memcpy(edge->rnp, rnp, 3 * sizeof(int));
-
-    tpl_unpack(tn, 3); // unpack data array
-
+    tpl_unpack(tn, 5); // unpack data array
     for (n=0; n<M->config.doubles_per_edge; ++n) {
-      tpl_unpack(tn, 4);
-      edge->data[n] = edge_data_val;
+      tpl_unpack(tn, 6);
+      edge->data[n] = data_val;
     }
     HASH_ADD(hh, M->edges, rnp, 3 * sizeof(int), edge);
   }
@@ -1008,8 +1032,8 @@ void write_meshes()
   if (1) {
     int I[4] = { 0, 0, 0, 0 };
     int i,j;
-    int d = 3;
-    rabbit_cfg config = { 10, 4, 4, 4 };
+    int d = 6;
+    rabbit_cfg config = { 12, 8, 0, 0 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
 
     for (i=0; i<(1<<d); ++i) {
@@ -1021,9 +1045,9 @@ void write_meshes()
         rabbit_mesh_putnode(mesh, I, RABBIT_ACTIVE);
       }
     }
-    rabbit_mesh_build(mesh);
-    rabbit_mesh_dump(mesh, "rabbit-2d.mesh");
-    rabbit_mesh_del(mesh);
+    TIME( rabbit_mesh_build(mesh) );
+    TIME( rabbit_mesh_dump(mesh, "rabbit-2d.mesh") );
+    TIME( rabbit_mesh_del(mesh) );
   }
   if (1) {
     rabbit_cfg config = { 10, 4, 4, 4 };
