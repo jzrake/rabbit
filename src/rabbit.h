@@ -50,10 +50,6 @@ void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 rabbit_mesh *rabbit_mesh_load(char *fname);
 
 
-void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth);
-void rabbit_edge_geom(rabbit_edge *F, int vertices[ 6], int *axis, int *depth);
-
-
 /* ------------------------------------------------------------------
  * RABBIT INTERNALS
  * --------------------------------------------------------------- */

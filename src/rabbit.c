@@ -17,13 +17,12 @@
  * private functions
  *
  */
-static uint64_t preorder_label(int index[4], int max_depth, int r);
-static uint64_t node_preorder_label(rabbit_node *node);
 static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
-static int      node_preorder_compare(rabbit_node *A, rabbit_node *B);
-static int      face_contiguous_compare(rabbit_face *A, rabbit_face *B);
-static int      edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B);
+static uint64_t preorder_label(int index[4], int max_depth, int r);
+static int64_t  node_preorder_compare(rabbit_node *A, rabbit_node *B);
+static int64_t  face_preorder_compare(rabbit_face *A, rabbit_face *B);
+static int64_t  edge_preorder_compare(rabbit_edge *A, rabbit_edge *B);
 static int      face_contains(rabbit_face *A, rabbit_face *B);
 static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
 
@@ -88,7 +87,6 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags)
     memcpy(node->index, index, 4 * sizeof(int));
 
     HASH_ADD(hh, M->nodes, index, 4 * sizeof(int), node);
-    MSG(1, "added node with preorder label %"PRIu64, node_preorder_label(node));
 
     return node;
   }
@@ -367,7 +365,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
   iter = 0;
   removed = 0;
 
-  HASH_SRT(hh, M->faces, face_contiguous_compare);
+  HASH_SRT(hh, M->faces, face_preorder_compare);
 
   HASH_ITER(hh, M->faces, face, tmp_face) {
 
@@ -429,7 +427,7 @@ void rabbit_mesh_build(rabbit_mesh *M)
   iter = 0;
   removed = 0;
 
-  HASH_SRT(hh, M->edges, edge_contiguous_compare);
+  HASH_SRT(hh, M->edges, edge_preorder_compare);
 
   HASH_ITER(hh, M->edges, edge, tmp_edge) {
 
@@ -550,87 +548,89 @@ rabbit_mesh *rabbit_mesh_load(char *fname)
   return M;
 }
 
-void rabbit_face_geom(rabbit_face *F, int vertices[12], int *axis, int *depth)
 /*
- * Calculate the rational number position a face's vertices in counter-clockwise
- * order, the orientation and depth of the face
+ * /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
  *
- * Faces are keyed by their rational number position (rnp), three integers
- * labeling the coordinates of the face's center. The depth and orientation of
- * the face are inferred from the least significant active bit in the rnp.
  *
+ *                           INTERNAL FUNCTIONS
+ *
+ *
+ * \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
+ */
+
+uint64_t interleave_bits2(uint64_t a, uint64_t b)
+/*
+ * Create a 64-bit integer by interleaving the bits of the 32-bit integers a and
+ * b
  */
 {
-  int D = F->mesh->config.max_depth;
-  int H[3] = { 0, 0, 0 }; // height
+  int n;
+  uint64_t label = 0;
 
-  while (((F->rnp[0] >> H[0]) & 1) == 0 && H[0] < D) ++H[0];
-  while (((F->rnp[1] >> H[1]) & 1) == 0 && H[1] < D) ++H[1];
-  while (((F->rnp[2] >> H[2]) & 1) == 0 && H[2] < D) ++H[2];
-
-  if (H[1] == H[2]) {
-
-    /* x-directed face */
-    if (axis) *axis = 0;
-    if (depth) *depth = D - H[1] - 1;
-    if (vertices) {
-      vertices[ 0] = F->rnp[0];
-      vertices[ 1] = F->rnp[1] - (1 << H[1]);
-      vertices[ 2] = F->rnp[2] - (1 << H[1]);
-      vertices[ 3] = F->rnp[0];
-      vertices[ 4] = F->rnp[1] + (1 << H[1]);
-      vertices[ 5] = F->rnp[2] - (1 << H[1]);
-      vertices[ 6] = F->rnp[0];
-      vertices[ 7] = F->rnp[1] + (1 << H[1]);
-      vertices[ 8] = F->rnp[2] + (1 << H[1]);
-      vertices[ 9] = F->rnp[0];
-      vertices[10] = F->rnp[1] - (1 << H[1]);
-      vertices[11] = F->rnp[2] + (1 << H[1]);
-    }
+  for (n=0; n<32; ++n) {
+    label += ((a >> n) & 1) << (2*n + 0);
+    label += ((b >> n) & 1) << (2*n + 1);
   }
-  if (H[2] == H[0]) {
 
-    /* y-directed face */
-    if (axis) *axis = 1;
-    if (depth) *depth = D - H[2] - 1;
-    if (vertices) {
-      vertices[ 0] = F->rnp[0] - (1 << H[2]);
-      vertices[ 1] = F->rnp[1];
-      vertices[ 2] = F->rnp[2] - (1 << H[2]);
-      vertices[ 3] = F->rnp[0] - (1 << H[2]);
-      vertices[ 4] = F->rnp[1];
-      vertices[ 5] = F->rnp[2] + (1 << H[2]);
-      vertices[ 6] = F->rnp[0] + (1 << H[2]);
-      vertices[ 7] = F->rnp[1];
-      vertices[ 8] = F->rnp[2] + (1 << H[2]);
-      vertices[ 9] = F->rnp[0] + (1 << H[2]);
-      vertices[10] = F->rnp[1];
-      vertices[11] = F->rnp[2] - (1 << H[2]);
-    }
-  }
-  if (H[0] == H[1]) { /* z-directed face */
-
-    /* z-directed face */
-    if (axis) *axis = 2;
-    if (depth) *depth = D - H[0] - 1;
-    if (vertices) {
-      vertices[ 0] = F->rnp[0] - (1 << H[0]);
-      vertices[ 1] = F->rnp[1] - (1 << H[0]);
-      vertices[ 2] = F->rnp[2];
-      vertices[ 3] = F->rnp[0] + (1 << H[0]);
-      vertices[ 4] = F->rnp[1] - (1 << H[0]);
-      vertices[ 5] = F->rnp[2];
-      vertices[ 6] = F->rnp[0] + (1 << H[0]);
-      vertices[ 7] = F->rnp[1] + (1 << H[0]);
-      vertices[ 8] = F->rnp[2];
-      vertices[ 9] = F->rnp[0] - (1 << H[0]);
-      vertices[10] = F->rnp[1] + (1 << H[0]);
-      vertices[11] = F->rnp[2];
-    }
-  }
+  return label;
 }
 
-int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
+uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
+/*
+ * Create a 64-bit integer by interleaving the bits of the 21-bit integers a, b,
+ * and c
+ */
+{
+  int n;
+  uint64_t label = 0;
+
+  for (n=0; n<21; ++n) {
+    label += ((a >> n) & 1) << (3*n + 0);
+    label += ((b >> n) & 1) << (3*n + 1);
+    label += ((c >> n) & 1) << (3*n + 2);
+  }
+
+  return label;
+}
+
+uint64_t preorder_label(int index[4], int max_depth, int r)
+/*
+ * Return the order in which a given node is visited in a preorder traversal of
+ * a fully fleshed out tree having arbitrary max_depth and branching ratio m=2^r
+ * where r=1,2,3
+ */
+{
+  int m = 1 << r; // branching ratio
+  int d, n, h, nb, sd, Md;
+  uint64_t adding, morton, label=0;
+
+  switch (r) {
+  case 1: morton = index[1]; break;
+  case 2: morton = interleave_bits2(index[1], index[2]); break;
+  case 3: morton = interleave_bits3(index[1], index[2], index[3]); break;
+  default: morton = 0;
+  }
+
+  for (d=0; d<index[0]; ++d) {
+    n = index[0] - d - 1; // bit
+    h = max_depth - d - 1;
+    nb = 1 << (r*n);
+    sd = (morton / nb) % m;
+    Md = tree_size_atlevel(r, h);
+    adding = sd * Md + 1;
+    label += adding;
+  }
+
+  return label;
+}
+
+int64_t node_preorder_compare(rabbit_node *A, rabbit_node *B)
+{
+  return (preorder_label(A->index, A->mesh->config.max_depth, 3) - 
+	  preorder_label(B->index, B->mesh->config.max_depth, 3));
+}
+
+int64_t face_preorder_compare(rabbit_face *A, rabbit_face *B)
 {
   int A_label;
   int B_label;
@@ -660,8 +660,10 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
   return A_label - B_label;
 }
 
-int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
+int64_t edge_preorder_compare(rabbit_edge *A, rabbit_edge *B)
 {
+  uint64_t A_label;
+  uint64_t B_label;
   int ax0, ax1, ax2;
 
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
@@ -686,17 +688,11 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
     return A_geom.vertices[ax2] - B_geom.vertices[ax2];
   }
 
-  /* left endpoint of segment along its own axis */
-  if (A_geom.vertices[ax0] != B_geom.vertices[ax0]) {
-    return A_geom.vertices[ax0] - B_geom.vertices[ax0];
-  }
+  /* 1d preorder label on the axis of both edges */
+  A_label = preorder_label(A_geom.index, A->mesh->config.max_depth, 1);
+  B_label = preorder_label(B_geom.index, B->mesh->config.max_depth, 1);
 
-  /* depth of segment */
-  if (A_geom.index[0] != B_geom.index[0]) {
-    return A_geom.index[0] - B_geom.index[0];
-  }
-
-  return 0;
+  return A_label - B_label;
 }
 
 int face_contains(rabbit_face *A, rabbit_face *B)
@@ -704,22 +700,15 @@ int face_contains(rabbit_face *A, rabbit_face *B)
  * Return true if face A contains face B
  */
 {
-  int A_vertices[12];
-  int B_vertices[12];
-  int A_axis;
-  int B_axis;
-  int A_depth;
-  int B_depth;
   int ax0, ax1, ax2;
+  rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
+  rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
-  rabbit_face_geom(A, A_vertices, &A_axis, &A_depth);
-  rabbit_face_geom(B, B_vertices, &B_axis, &B_depth);
-
-  ax0 = A_axis;
+  ax0 = A_geom.axis;
   ax1 = (ax0 + 1) % 3;
   ax2 = (ax0 + 2) % 3;
 
-  if (A_axis != B_axis) {
+  if (A_geom.axis != B_geom.axis) {
     return 0;
   }
 
@@ -727,10 +716,10 @@ int face_contains(rabbit_face *A, rabbit_face *B)
     return 0;
   }
 
-  return (A_vertices[3*0 + ax1] <= B_vertices[3*0 + ax1] &&
-          A_vertices[3*0 + ax2] <= B_vertices[3*0 + ax2] &&
-          A_vertices[3*3 + ax1] >= B_vertices[3*3 + ax1] &&
-          A_vertices[3*3 + ax2] >= B_vertices[3*3 + ax2]);
+  return (A_geom.vertices[3*0 + ax1] <= B_geom.vertices[3*0 + ax1] &&
+          A_geom.vertices[3*0 + ax2] <= B_geom.vertices[3*0 + ax2] &&
+          A_geom.vertices[3*3 + ax1] >= B_geom.vertices[3*3 + ax1] &&
+          A_geom.vertices[3*3 + ax2] >= B_geom.vertices[3*3 + ax2]);
 }
 
 int edge_contains(rabbit_edge *A, rabbit_edge *B)
@@ -738,40 +727,24 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
  * Return true if edge A contains edge B
  */
 {
-  int n, len_a, len_b, axis_a, axis_b;
   int ax0, ax1, ax2;
-
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
-  for (n=0; n<3; ++n) {
-
-    len_a = A_geom.vertices[n+3] - A_geom.vertices[n];
-    len_b = B_geom.vertices[n+3] - B_geom.vertices[n];
-
-    if (len_a != 0) {
-      axis_a = n;
-    }
-
-    if (len_b != 0) {
-      axis_b = n;
-    }
-  }
-
-  ax0 = axis_a;
+  ax0 = A_geom.axis;
   ax1 = (ax0 + 1) % 3; // only used if axis_a == axis_b
   ax2 = (ax0 + 2) % 3;
 
   /* different orientation? */
-  if (axis_a != axis_b) {
+  if (A_geom.axis != B_geom.axis) {
     return 0;
   }
 
   /* not co-linear? */
-  if (A_geom.vertices[ax1] != B_geom.vertices[ax1]) {
+  if (A->rnp[ax1] != B->rnp[ax1]) {
     return 0;
   }
-  if (A_geom.vertices[ax2] != B_geom.vertices[ax2]) {
+  if (A->rnp[ax2] != B->rnp[ax2]) {
     return 0;
   }
 
@@ -779,83 +752,16 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
           A_geom.vertices[ax0+3] >= B_geom.vertices[ax0+3]);
 }
 
-int node_preorder_compare(rabbit_node *A, rabbit_node *B)
-{
-  return node_preorder_label(A) - node_preorder_label(B);
-}
 
-uint64_t node_preorder_label(rabbit_node *node)
-{
-  return preorder_label(node->index, node->mesh->config.max_depth, 3);
-}
-
-uint64_t preorder_label(int index[4], int max_depth, int r)
 /*
- * Return the order in which a given node is visited in a preorder traversal of
- * a fully fleshed out tree having arbitrary max_depth and branching ratio m=2^r
- * where r=1,2,3
+ * /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+ *
+ *
+ *                                  TESTS
+ *
+ *
+ * \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
  */
-{
-  int m = 1 << r; // branching ratio
-  int d, n, h, nb, sd, Md, adding, label=0;
-  uint64_t morton;
-
-  switch (r) {
-  case 1: morton = index[1]; break;
-  case 2: morton = interleave_bits2(index[1], index[2]); break;
-  case 3: morton = interleave_bits3(index[1], index[2], index[3]); break;
-  default: morton = 0;
-  }
-
-  for (d=0; d<index[0]; ++d) {
-    n = index[0] - d - 1; // bit
-    h = max_depth - d - 1;
-    nb = 1 << (r*n);
-    sd = (morton / nb) % m;
-    Md = tree_size_atlevel(r, h);
-    adding = sd * Md + 1;
-    label += adding;
-  }
-
-  return label;
-}
-
-uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c)
-/*
- * Create a 64-bit integer by interleaving the bits of the 21-bit integers a, b,
- * and c
- */
-{
-  int n;
-  uint64_t label = 0;
-
-  for (n=0; n<21; ++n) {
-    label += ((a >> n) & 1) << (3*n + 0);
-    label += ((b >> n) & 1) << (3*n + 1);
-    label += ((c >> n) & 1) << (3*n + 2);
-  }
-
-  return label;
-}
-
-uint64_t interleave_bits2(uint64_t a, uint64_t b)
-/*
- * Create a 64-bit integer by interleaving the bits of the 32-bit integers a and
- * b
- */
-{
-  int n;
-  uint64_t label = 0;
-
-  for (n=0; n<32; ++n) {
-    label += ((a >> n) & 1) << (2*n + 0);
-    label += ((b >> n) & 1) << (2*n + 1);
-  }
-
-  return label;
-}
-
-
 #ifndef RABBIT_LIB
 static void sanity_tests()
 {
@@ -933,12 +839,12 @@ static void sanity_tests()
   }
   if (1) {
     int D=10, d=1, i=1, j=0, k=0;
-    int vertices[12];
+    int *vertices;
     int axis, depth;
+    int rnp[3];
     rabbit_cfg config = { D, 4, 4, 4 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
-    rabbit_face F;
-    F.mesh = mesh;
+    rabbit_geom geom;
 
     /* y
      * ^
@@ -953,21 +859,31 @@ static void sanity_tests()
      * z------------> x
      */
 
-    F.rnp[0] = (2 * i + 1) << (D - d - 1); // formula for rnp of left z-face
-    F.rnp[1] = (2 * j + 1) << (D - d - 1);
-    F.rnp[2] = (2 * k + 0) << (D - d - 1);
+    rnp[0] = (2 * i + 1) << (D - d - 1); // formula for rnp of left z-face
+    rnp[1] = (2 * j + 1) << (D - d - 1);
+    rnp[2] = (2 * k + 0) << (D - d - 1);
 
-    rabbit_face_geom(&F, vertices, &axis, &depth);
+    geom = rabbit_mesh_geom(mesh, rnp);
+    axis = geom.axis;
+    depth = geom.index[0];
+    vertices = geom.vertices;
 
+    /* Demonstrates ordering of vertices around face. For CCW ordering, take
+       vertices 0, 2, 3, 1 */
     ASSERTEQI(axis, 2);
     ASSERTEQI(depth, 1);
-    ASSERTEQI(vertices[0], (2 * i + 0) << (D - d - 1));
-    ASSERTEQI(vertices[1], (2 * j + 0) << (D - d - 1));
-    ASSERTEQI(vertices[2], (2 * k + 0) << (D - d - 1));
-
-    ASSERTEQI(vertices[3], (2 * i + 2) << (D - d - 1));
-    ASSERTEQI(vertices[4], (2 * j + 0) << (D - d - 1));
-    ASSERTEQI(vertices[5], (2 * k + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 0], (2 * i + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 1], (2 * j + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 2], (2 * k + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 3], (2 * i + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 4], (2 * j + 2) << (D - d - 1));
+    ASSERTEQI(vertices[ 5], (2 * k + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 6], (2 * i + 2) << (D - d - 1));
+    ASSERTEQI(vertices[ 7], (2 * j + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 8], (2 * k + 0) << (D - d - 1));
+    ASSERTEQI(vertices[ 9], (2 * i + 2) << (D - d - 1));
+    ASSERTEQI(vertices[10], (2 * j + 2) << (D - d - 1));
+    ASSERTEQI(vertices[11], (2 * k + 0) << (D - d - 1));
 
     rabbit_mesh_del(mesh);
   }
@@ -1114,11 +1030,11 @@ int main()
        );
 
   TIME(
-       HASH_SRT(hh, mesh->faces, face_contiguous_compare)
+       HASH_SRT(hh, mesh->faces, face_preorder_compare)
        );
 
   TIME(
-       HASH_SRT(hh, mesh->edges, edge_contiguous_compare)
+       HASH_SRT(hh, mesh->edges, edge_preorder_compare)
        );
 
   MSG(0, "there are %d total nodes", rabbit_mesh_count(mesh, RABBIT_ACTIVE));
