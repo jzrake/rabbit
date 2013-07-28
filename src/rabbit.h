@@ -16,6 +16,7 @@
 #define RABBIT_FACE     (1 << 6)
 #define RABBIT_EDGE     (1 << 7)
 #define RABBIT_RNP      (1 << 8)
+#define RABBIT_INDEX    (1 << 9)
 
 typedef struct rabbit_mesh rabbit_mesh;
 typedef struct rabbit_node rabbit_node;
@@ -39,10 +40,10 @@ typedef struct
 
 void         rabbit_mesh_del(rabbit_mesh *M);
 rabbit_mesh *rabbit_mesh_new(rabbit_cfg cfg);
-rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int index[4], int flags);
-rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int index[4]);
-rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int index[4]);
-rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int index[4]);
+rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int *A, int flags);
+rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int *A, int flags);
+rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int *A, int flags);
+rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags);
 rabbit_geom  rabbit_mesh_geom(rabbit_mesh *M, int rnp[3]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
 int          rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N);
