@@ -662,35 +662,18 @@ int face_contiguous_compare(rabbit_face *A, rabbit_face *B)
 
 int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
 {
-  int n, len_a, len_b, axis_a, axis_b, depth_a=0, depth_b=0;
   int ax0, ax1, ax2;
 
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
-  for (n=0; n<3; ++n) {
-
-    len_a = A_geom.vertices[n+3] - A_geom.vertices[n];
-    len_b = B_geom.vertices[n+3] - B_geom.vertices[n];
-
-    if (len_a != 0) {
-      axis_a = n;
-      while (len_a >>= 1) ++depth_a;
-    }
-
-    if (len_b != 0) {
-      axis_b = n;
-      while (len_b >>= 1) ++depth_b;
-    }
-  }
-
-  ax0 = axis_a;
+  ax0 = A_geom.axis;
   ax1 = (ax0 + 1) % 3; // only used if axis_a == axis_b
   ax2 = (ax0 + 2) % 3;
 
   /* orientation (x, y, z) - directed */
-  if (axis_a != axis_b) {
-    return axis_a - axis_b;
+  if (A_geom.axis != B_geom.axis) {
+    return A_geom.axis - B_geom.axis;
   }
 
   /* coordinate of next axis */
@@ -709,8 +692,8 @@ int edge_contiguous_compare(rabbit_edge *A, rabbit_edge *B)
   }
 
   /* depth of segment */
-  if (depth_a != depth_b) {
-    return depth_a - depth_b;
+  if (A_geom.index[0] != B_geom.index[0]) {
+    return A_geom.index[0] - B_geom.index[0];
   }
 
   return 0;
