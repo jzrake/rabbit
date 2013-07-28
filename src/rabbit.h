@@ -3,6 +3,9 @@
 
 #include <inttypes.h> /* uint64_t */
 
+/* use ffs call to identify least significant bits, may not be portable */
+#define RABBIT_USE_SYSTEM_FFS
+
 /* ------------------------------------------------------------------
  * RABBIT PUBLIC API
  * --------------------------------------------------------------- */

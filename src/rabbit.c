@@ -32,6 +32,16 @@ static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
  */
 #define tree_size_atlevel(r, n) ((1 << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
 
+#ifdef RABBIT_USE_SYSTEM_FFS
+#define FFS(i) ffs(i)
+#else
+static int FFS(i)
+{
+  int h = 0;
+  while (((i >> h) & 1) == 0 && h < 32) ++h;
+  return h + 1;
+}
+#endif // RABBIT_USE_FFS
 
 
 /*
@@ -122,7 +132,7 @@ rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int *A, int flags)
   rabbit_node *node;
 
   if (flags & RABBIT_RNP) {
-    HASH_FIND(hh, M->nodes, A, 3 * sizeof(int), node);    
+    HASH_FIND(hh, M->nodes, A, 3 * sizeof(int), node);
   }
   else {
     int h = M->config.max_depth - A[0] - 1;
@@ -131,7 +141,7 @@ rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int *A, int flags)
     rnp[0] = (2 * A[1] + 1) << h;
     rnp[1] = (2 * A[2] + 1) << h;
     rnp[2] = (2 * A[3] + 1) << h;
-    
+
     HASH_FIND(hh, M->nodes, rnp, 3 * sizeof(int), node);
   }
 
@@ -155,14 +165,21 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
 {
   rabbit_node *node;
   int I[4];
+  int rnp[3];
 
-  if ((node = rabbit_mesh_getnode(M, A, flags))) {
+  if ((((flags & RABBIT_RNP) != 0) && (A[0] == 0 && A[1] == 0 && A[2] == 0)) ||
+      (((flags & RABBIT_RNP) == 0) && (A[0] < 0))) {
+    return NULL;
+  }
+  else if ((node = rabbit_mesh_getnode(M, A, flags))) {
     return node;
   }
   else {
     if (flags & RABBIT_RNP) {
-      /* not yet implemented */
-      return NULL;
+      rnp[0] = A[0] ^ (1 << FFS(A[0]));
+      rnp[1] = A[1] ^ (1 << FFS(A[1]));
+      rnp[2] = A[2] ^ (1 << FFS(A[2]));
+      return rabbit_mesh_containing(M, rnp, flags);
     }
     else {
       I[0] = A[0] - 1;
@@ -184,9 +201,9 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
 
   /* find the position of the least significant active bit in the rational
      number position, the "height" */
-  while (((rnp[0] >> H[0]) & 1) == 0 && H[0] < D) ++H[0];
-  while (((rnp[1] >> H[1]) & 1) == 0 && H[1] < D) ++H[1];
-  while (((rnp[2] >> H[2]) & 1) == 0 && H[2] < D) ++H[2];
+  H[0] = rnp[0] ? FFS(rnp[0]) - 1 : D;
+  H[1] = rnp[1] ? FFS(rnp[1]) - 1 : D;
+  H[2] = rnp[2] ? FFS(rnp[2]) - 1 : D;
 
   /* if the height is the same along every axis then this is a node */
   if (H[0] == H[1] && H[1] == H[2]) {
