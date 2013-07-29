@@ -162,6 +162,17 @@ rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int *A, int flags)
 }
 
 rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
+/*
+ * Return the smallest node of which the index or rational number position (rnp)
+ * A is a subset, including A if it exists
+ *
+ * NOTES:
+ *
+ *  + containment is not well-defined when the rnp is not in the open interval
+ *    (0, 1)^3
+ *
+ *  + the rnp must represent a node, otherwise NULL will be returned
+ */
 {
   rabbit_node *node;
   rabbit_geom geom;

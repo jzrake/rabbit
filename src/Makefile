@@ -1,6 +1,6 @@
 
 CFLAGS = -Wall -O3
-EXE = rabrun rabfile rabview
+EXE = rabrun rabfile rabview hydro
 
 GL_LIB = -framework OpenGL -framework GLUT
 GL_INC = -I/usr/X11R6/include
@@ -13,6 +13,8 @@ rabfile : rabfile.o rabbit.o tpl.o
 
 rabview : rabview.o rabbit.o tpl.o
 	$(CC) $(CFLAGS) -o $@ $^ $(GL_LIB)
+
+hydro : hydro.o rabbit.o tpl.o
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
