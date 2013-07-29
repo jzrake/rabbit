@@ -164,30 +164,30 @@ rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int *A, int flags)
 rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
 {
   rabbit_node *node;
+  rabbit_geom geom;
   int I[4];
-  int rnp[3];
 
-  if ((((flags & RABBIT_RNP) != 0) && (A[0] == 0 && A[1] == 0 && A[2] == 0)) ||
-      (((flags & RABBIT_RNP) == 0) && (A[0] < 0))) {
+  if (flags & RABBIT_RNP) {
+    flags ^= (RABBIT_RNP | RABBIT_INDEX);
+    geom = rabbit_mesh_geom(M, A);
+    memcpy(I, geom.index, 4 * sizeof(int));
+  }
+  else {
+    memcpy(I, A, 4 * sizeof(int));
+  }
+
+  if (I[0] < 0) {
     return NULL;
   }
-  else if ((node = rabbit_mesh_getnode(M, A, flags))) {
+  else if ((node = rabbit_mesh_getnode(M, I, flags))) {
     return node;
   }
   else {
-    if (flags & RABBIT_RNP) {
-      rnp[0] = A[0] ^ (1 << FFS(A[0]));
-      rnp[1] = A[1] ^ (1 << FFS(A[1]));
-      rnp[2] = A[2] ^ (1 << FFS(A[2]));
-      return rabbit_mesh_containing(M, rnp, flags);
-    }
-    else {
-      I[0] = A[0] - 1;
-      I[1] = A[1] / 2;
-      I[2] = A[2] / 2;
-      I[3] = A[3] / 2;
-      return rabbit_mesh_containing(M, I, flags);
-    }
+    I[0] -= 1;
+    I[1] /= 2;
+    I[2] /= 2;
+    I[3] /= 2;
+    return rabbit_mesh_containing(M, I, flags);
   }
 }
 
@@ -879,8 +879,10 @@ static void sanity_tests()
   }
   if (1) {
     int I[4] = { 0, 0, 0, 0 };
+    int R[3] = { 0, 0, 0 };
     rabbit_mesh *mesh = rabbit_mesh_load("rabbit-single.mesh");
     rabbit_node *node = rabbit_mesh_getnode(mesh, I, RABBIT_INDEX);
+    rabbit_geom geom;
     ASSERTEQF(node->data[0], 10.0);
     ASSERTEQF(node->data[1], 20.0);
     ASSERTEQF(node->data[2], 30.0);
@@ -890,6 +892,25 @@ static void sanity_tests()
     ASSERTEQI(mesh->config.doubles_per_edge, 4);
     ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_ACTIVE), 1);
     ASSERTEQI(rabbit_mesh_count(mesh, RABBIT_EDGE), 12);
+
+    I[0] = 1;
+    node = rabbit_mesh_containing(mesh, I, RABBIT_INDEX);
+    geom = rabbit_mesh_geom(mesh, node->rnp);
+    ASSERTEQI(geom.index[0], 0);
+
+    R[0] = 511;
+    R[1] = 511;
+    R[2] = 511;
+
+    node = rabbit_mesh_containing(mesh, R, RABBIT_RNP);
+    geom = rabbit_mesh_geom(mesh, node->rnp);
+    ASSERTEQI(geom.index[0], 0);
+
+    I[0] = 0;
+    rabbit_mesh_delnode(mesh, I, RABBIT_INDEX);
+    node = rabbit_mesh_containing(mesh, R, RABBIT_RNP);
+    ASSERTEQI(node == NULL, 1);
+
     rabbit_mesh_del(mesh);
   }
   if (1) {
