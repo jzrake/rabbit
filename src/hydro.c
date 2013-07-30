@@ -81,9 +81,13 @@ void advance(rabbit_mesh *mesh, double dt)
 
   HASH_ITER(hh, mesh->faces, face, tmp_face) {
     geomF = rabbit_mesh_geom(mesh, face->rnp);
+
     if (geomF.axis == 0) {
+
       face_get_nodes(face, &nL, &nR, 0);
+
       if (nL && nR) {
+
 	const Primitive *Pl = (const Primitive*) nL->data;
 	const Primitive *Pr = (const Primitive*) nR->data;
 	Conserved F = RiemannSolver(Pl, Pr, 0);
@@ -116,13 +120,27 @@ int main(int argc, char **argv)
   rabbit_cfg config = { 16, 10, 0, 0 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
-  int d = 9;
+  int d = 7;
   int i;
   int index[4] = { d, 0, 0, 0 };
 
-  for (i=0; i<(1<<d); ++i) {
-    index[1] = i;
-    rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+  if (0) {
+    for (i=0; i<(1<<d); ++i) {
+      index[1] = i;
+      rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+    }
+  }
+  else if (1) {
+    for (i=0; i<(1<<d)/4; ++i) {
+      index[0] = d - 1;
+      index[1] = i;
+      rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+    }
+    for (i=(1<<d)/2; i<(1<<d); ++i) {
+      index[0] = d;
+      index[1] = i;
+      rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
+    }
   }
   rabbit_mesh_build(mesh);
 

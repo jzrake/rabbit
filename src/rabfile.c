@@ -21,12 +21,12 @@ int main(int argc, char **argv)
   }
 
   rabbit_mesh *mesh = rabbit_mesh_load(argv[1]);
-  rabbit_cfg config = mesh->config;
+  //  rabbit_cfg config = mesh->config;
   rabbit_node *node, *tmp_node;
   //  rabbit_edge *edge, *tmp_edge;
-  rabbit_geom geom;
+  //  rabbit_geom geom;
   int n;
-  int *I;
+  //  int *I;
   //  int *V;
   /*
   printf("rabbit_cfg:\n");
@@ -42,10 +42,10 @@ int main(int argc, char **argv)
   */
 
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    geom = rabbit_mesh_geom(mesh, node->rnp);
-    I = geom.index;
+    //    geom = rabbit_mesh_geom(mesh, node->rnp);
+    //    I = geom.index;
     //    printf("N %d %d %d %d :", I[0], I[1], I[2], I[3]);
-    printf("%d ", I[1]);
+    printf("%d ", node->rnp[0]);
     for (n=0; n<mesh->config.doubles_per_node; ++n) {
       printf(" %f", node->data[n]);
     }
