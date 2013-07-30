@@ -65,19 +65,13 @@ void build_ghost(rabbit_mesh *mesh)
   rabbit_mesh_build(mesh);
 }
 
-void advance(rabbit_mesh *mesh, double dt)
+void onestep(rabbit_mesh *mesh, double dt)
 {
   rabbit_node *nL, *nR;
-  rabbit_node *node, *tmp_node;
   rabbit_face *face, *tmp_face;
   rabbit_geom geomF, geomL, geomR;
   int q;
 
-  HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    const Primitive *P = (const Primitive*) node->data;
-    const Conserved U = PrimToCons(P);
-    memcpy(&node->data[5], &U, 5 * sizeof(double));
-  }
   HASH_ITER(hh, mesh->faces, face, tmp_face) {
     geomF = rabbit_mesh_geom(mesh, face->rnp);
     if (geomF.axis == 0) {
@@ -92,29 +86,35 @@ void advance(rabbit_mesh *mesh, double dt)
 	double dVL = 1.0 / (1 << geomL.index[0]);
 	double dVR = 1.0 / (1 << geomR.index[0]);
 	for (q=0; q<5; ++q) {
-	  nL->data[5 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nR->data[5 + q] += ((double*)&F)[q] * dt * dA / dVR;
+	  nL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
+	  nR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
 	}
       }
     }
   }
+}
+
+void average(rabbit_mesh *mesh, double a, double b)
+{
+  rabbit_node *node, *tmp_node;
+  int q;
+
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    const Conserved *U = (const Conserved*) &node->data[5];
-    const Primitive P = ConsToPrim(U);
     if ((node->flags & RABBIT_GHOST) == 0) {
+      double *U0 = &node->data[5];
+      double *U1 = &node->data[10];
+      for (q=0; q<5; ++q) {
+	U1[q] = a * U0[q] + b * U1[q];
+      }
+      const Primitive P = ConsToPrim((const Conserved*) U1);
       memcpy(&node->data[0], &P, 5 * sizeof(double));
     }
   }
 }
 
-void advanceRK3(rabbit_mesh *mesh, double dt)
+void advance(rabbit_mesh *mesh, double dt)
 {
-  rabbit_node *nL, *nR;
   rabbit_node *node, *tmp_node;
-  rabbit_face *face, *tmp_face;
-  rabbit_geom geomF, geomL, geomR;
-  int q;
-
 
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
     const Primitive *P = (const Primitive*) &node->data[0];
@@ -123,116 +123,29 @@ void advanceRK3(rabbit_mesh *mesh, double dt)
     memcpy(&node->data[10], &U, 5 * sizeof(double));
   }
 
+  onestep(mesh, dt);
+  average(mesh, 0.0, 1.0);
+}
 
+void advanceRK3(rabbit_mesh *mesh, double dt)
+{
+  rabbit_node *node, *tmp_node;
 
-  /* ---------------------------------------------------------------------------
-   * STEP 1
-   * ------------------------------------------------------------------------ */
-  HASH_ITER(hh, mesh->faces, face, tmp_face) {
-    geomF = rabbit_mesh_geom(mesh, face->rnp);
-    if (geomF.axis == 0) {
-      face_get_nodes(face, &nL, &nR, 0);
-      if (nL && nR) {
-	const Primitive *Pl = (const Primitive*) nL->data;
-	const Primitive *Pr = (const Primitive*) nR->data;
-	Conserved F = RiemannSolver(Pl, Pr, 0);
-	geomL = rabbit_mesh_geom(mesh, nL->rnp);
-	geomR = rabbit_mesh_geom(mesh, nR->rnp);
-	double dA = 1.0;
-	double dVL = 1.0 / (1 << geomL.index[0]);
-	double dVR = 1.0 / (1 << geomR.index[0]);
-	for (q=0; q<5; ++q) {
-	  nL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
-	}
-      }
-    }
-  }
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    if ((node->flags & RABBIT_GHOST) == 0) {
-      double *U0 = &node->data[5];
-      double *U1 = &node->data[10];
-      for (q=0; q<5; ++q) {
-	U1[q] = 0.0/1.0 * U0[q] + 1./1. * U1[q];
-      }
-      const Primitive P = ConsToPrim((const Conserved*) U1);
-      memcpy(&node->data[0], &P, 5 * sizeof(double));
-    }
+    const Primitive *P = (const Primitive*) &node->data[0];
+    const Conserved U = PrimToCons(P);
+    memcpy(&node->data[ 5], &U, 5 * sizeof(double));
+    memcpy(&node->data[10], &U, 5 * sizeof(double));
   }
 
+  onestep(mesh, dt);
+  average(mesh, 0./1, 1./1);
 
+  onestep(mesh, dt);
+  average(mesh, 3./4, 1./4);
 
-  /* ---------------------------------------------------------------------------
-   * STEP 2
-   * ------------------------------------------------------------------------ */
-  HASH_ITER(hh, mesh->faces, face, tmp_face) {
-    geomF = rabbit_mesh_geom(mesh, face->rnp);
-    if (geomF.axis == 0) {
-      face_get_nodes(face, &nL, &nR, 0);
-      if (nL && nR) {
-	const Primitive *Pl = (const Primitive*) nL->data;
-	const Primitive *Pr = (const Primitive*) nR->data;
-	Conserved F = RiemannSolver(Pl, Pr, 0);
-	geomL = rabbit_mesh_geom(mesh, nL->rnp);
-	geomR = rabbit_mesh_geom(mesh, nR->rnp);
-	double dA = 1.0;
-	double dVL = 1.0 / (1 << geomL.index[0]);
-	double dVR = 1.0 / (1 << geomR.index[0]);
-	for (q=0; q<5; ++q) {
-	  nL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
-	}
-      }
-    }
-  }
-  HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    if ((node->flags & RABBIT_GHOST) == 0) {
-      double *U0 = &node->data[5];
-      double *U1 = &node->data[10];
-      for (q=0; q<5; ++q) {
-	U1[q] = 3./4. * U0[q] + 1./4. * U1[q];
-      }
-      const Primitive P = ConsToPrim((const Conserved*) U1);
-      memcpy(&node->data[0], &P, 5 * sizeof(double));
-    }
-  }
-
-
-
-  /* ---------------------------------------------------------------------------
-   * STEP 3
-   * ------------------------------------------------------------------------ */
-  HASH_ITER(hh, mesh->faces, face, tmp_face) {
-    geomF = rabbit_mesh_geom(mesh, face->rnp);
-    if (geomF.axis == 0) {
-      face_get_nodes(face, &nL, &nR, 0);
-      if (nL && nR) {
-	const Primitive *Pl = (const Primitive*) nL->data;
-	const Primitive *Pr = (const Primitive*) nR->data;
-	Conserved F = RiemannSolver(Pl, Pr, 0);
-	geomL = rabbit_mesh_geom(mesh, nL->rnp);
-	geomR = rabbit_mesh_geom(mesh, nR->rnp);
-	double dA = 1.0;
-	double dVL = 1.0 / (1 << geomL.index[0]);
-	double dVR = 1.0 / (1 << geomR.index[0]);
-	for (q=0; q<5; ++q) {
-	  nL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
-	}
-      }
-    }
-  }
-  HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-    if ((node->flags & RABBIT_GHOST) == 0) {
-      double *U0 = &node->data[5];
-      double *U1 = &node->data[10];
-      for (q=0; q<5; ++q) {
-	U1[q] = 1./3. * U0[q] + 2./3. * U1[q];
-      }
-      const Primitive P = ConsToPrim((const Conserved*) U1);
-      memcpy(&node->data[0], &P, 5 * sizeof(double));
-    }
-  }
+  onestep(mesh, dt);
+  average(mesh, 1./3, 2./3);
 }
 
 int main(int argc, char **argv)
@@ -240,7 +153,7 @@ int main(int argc, char **argv)
   rabbit_cfg config = { 16, 15, 0, 0 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
-  int d = 7;
+  int d = 9;
   int i;
   int index[4] = { d, 0, 0, 0 };
 
@@ -287,10 +200,10 @@ int main(int argc, char **argv)
 
 
   double t = 0.0;
-  double dt = 0.003;
+  double dt = 0.00075;
 
   while (t < 0.2) {
-    advance(mesh, dt);
+    advanceRK3(mesh, dt);
     t += dt;
     printf("t=%4.3f\n", t);
   }
