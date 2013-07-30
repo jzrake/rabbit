@@ -8,13 +8,16 @@ GL_INC = -I/usr/X11R6/include
 default : $(EXE)
 
 rabrun : rabrun.o tpl.o
+	$(CC) $(CFLAGS) -o $@ $^
 
 rabfile : rabfile.o rabbit.o tpl.o
+	$(CC) $(CFLAGS) -o $@ $^
 
 rabview : rabview.o rabbit.o tpl.o
 	$(CC) $(CFLAGS) -o $@ $^ $(GL_LIB)
 
-hydro : hydro.o rabbit.o tpl.o
+hydro : hydro.o rabbit.o tpl.o euler1d.o
+	$(CC) $(CFLAGS) -o $@ $^
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<

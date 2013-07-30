@@ -22,12 +22,13 @@ int main(int argc, char **argv)
 
   rabbit_mesh *mesh = rabbit_mesh_load(argv[1]);
   rabbit_cfg config = mesh->config;
-  //  rabbit_node *node, *tmp_node;
+  rabbit_node *node, *tmp_node;
   //  rabbit_edge *edge, *tmp_edge;
-  //  rabbit_geom geom;
-  //  int n;
-  //  int *I, *V;
-
+  rabbit_geom geom;
+  int n;
+  int *I;
+  //  int *V;
+  /*
   printf("rabbit_cfg:\n");
   printf("  max_depth = %d\n", config.max_depth);
   printf("  doubles_per_node = %d\n", config.doubles_per_node);
@@ -38,18 +39,20 @@ int main(int argc, char **argv)
   printf("  number of nodes = %d\n", rabbit_mesh_count(mesh, RABBIT_ACTIVE));
   printf("  number of faces = %d\n", rabbit_mesh_count(mesh, RABBIT_FACE));
   printf("  number of edges = %d\n", rabbit_mesh_count(mesh, RABBIT_EDGE));
+  */
 
-  /*
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
     geom = rabbit_mesh_geom(mesh, node->rnp);
     I = geom.index;
-    printf("N %d %d %d %d :", I[0], I[1], I[2], I[3]);
+    //    printf("N %d %d %d %d :", I[0], I[1], I[2], I[3]);
+    printf("%d ", I[1]);
     for (n=0; n<mesh->config.doubles_per_node; ++n) {
       printf(" %f", node->data[n]);
     }
     printf("\n");
   }
 
+  /*
   HASH_ITER(hh, mesh->edges, edge, tmp_edge) {
     geom = rabbit_mesh_geom(mesh, edge->rnp);
     V = geom.vertices;

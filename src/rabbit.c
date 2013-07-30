@@ -187,7 +187,13 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
     memcpy(I, A, 4 * sizeof(int));
   }
 
-  if (I[0] < 0) {
+  if (I[1] < 0 || I[1] >= (1 << I[0]) ||
+      I[2] < 0 || I[2] >= (1 << I[0]) || 
+      I[3] < 0 || I[3] >= (1 << I[0])) {
+    /* can't handle containment off-bounds */
+    return rabbit_mesh_getnode(M, I, flags);
+  }
+  else if (I[0] < 0) {
     return NULL;
   }
   else if ((node = rabbit_mesh_getnode(M, I, flags))) {
