@@ -50,6 +50,34 @@ void face_get_nodes(rabbit_face *face, rabbit_node **nL, rabbit_node **nR,
   }
 }
 
+int face_get_nodes2(rabbit_face *face, rabbit_node **nodes, int num)
+{
+  int rnp[3];
+  int h;
+  int n;
+  int all_there = 1;
+  rabbit_geom geom;
+
+  geom = rabbit_mesh_geom(face->mesh, face->rnp);
+  h = face->mesh->config.max_depth - geom.index[0] - 1;
+
+  for (n=0; n<num; ++n) {
+
+    memcpy(rnp, face->rnp, 3 * sizeof(int));
+    rnp[geom.axis] -= (2*n + 1) * (1 << h);
+    nodes[num - n - 1] = rabbit_mesh_containing(face->mesh, rnp, RABBIT_RNP);
+    all_there *= (nodes[num - n - 1] != NULL);
+
+    memcpy(rnp, face->rnp, 3 * sizeof(int));
+    rnp[geom.axis] += (2*n + 1) * (1 << h);
+    nodes[num + n + 0] = rabbit_mesh_containing(face->mesh, rnp, RABBIT_RNP);
+    all_there *= (nodes[num + n + 0] != NULL);
+
+  }
+
+  return all_there;
+}
+
 void build_ghost(rabbit_mesh *mesh)
 {
   rabbit_face *face;
@@ -67,28 +95,48 @@ void build_ghost(rabbit_mesh *mesh)
 
 void onestep(rabbit_mesh *mesh, double dt)
 {
-  rabbit_node *nL, *nR;
+  Primitive P[4];
+  Primitive Pl, Pr;
   rabbit_face *face, *tmp_face;
   rabbit_geom geomF, geomL, geomR;
-  int q;
+  int n, q;
 
   HASH_ITER(hh, mesh->faces, face, tmp_face) {
     geomF = rabbit_mesh_geom(mesh, face->rnp);
     if (geomF.axis == 0) {
-      face_get_nodes(face, &nL, &nR, 0);
-      if (nL && nR) {
-	const Primitive *Pl = (const Primitive*) nL->data;
-	const Primitive *Pr = (const Primitive*) nR->data;
-	Conserved F = RiemannSolver(Pl, Pr, 0);
-	geomL = rabbit_mesh_geom(mesh, nL->rnp);
-	geomR = rabbit_mesh_geom(mesh, nR->rnp);
+
+      rabbit_node *nodes[4];
+
+      face_get_nodes2(face, nodes+0, 2);
+
+      if (nodes[1] && nodes[2]) {
+	if (nodes[0] == NULL) {
+	  nodes[0] = nodes[1];
+	}
+	if (nodes[3] == NULL) {
+	  nodes[3] = nodes[2];
+	}
+
+	for (n=0; n<4; ++n) {
+	  P[n] = *((const Primitive*) nodes[n]->data);
+	}
+
+        ReconstructStates(&P[1], &Pl, &Pr);
+
+	Conserved F = RiemannSolver(&Pl, &Pr, 0);
+	geomL = rabbit_mesh_geom(mesh, nodes[1]->rnp);
+	geomR = rabbit_mesh_geom(mesh, nodes[2]->rnp);
+
 	double dA = 1.0;
 	double dVL = 1.0 / (1 << geomL.index[0]);
 	double dVR = 1.0 / (1 << geomR.index[0]);
 	for (q=0; q<5; ++q) {
-	  nL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
+	  nodes[1]->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
+	  nodes[2]->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
 	}
+      }
+      else {
+	printf("they're not all there at %d\n", face->rnp[0]);
       }
     }
   }
@@ -195,6 +243,7 @@ int main(int argc, char **argv)
     }
   }
 
+  build_ghost(mesh);
   build_ghost(mesh);
   printf("there are %d ghost zones\n", rabbit_mesh_count(mesh, RABBIT_GHOST));
 
