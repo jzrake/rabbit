@@ -11,8 +11,8 @@ static void GLUTReshapeFunc(int width, int height);
 static void GLUTKeyboardFunc(unsigned char key, int x, int y);
 static void GLUTSpecialFunc(int key, int x, int y);
 
-static double TranslateZ = -4.0;
-static double RotationX = 0.0;
+static double TranslateZ = -2.0;
+static double RotationX = 90.0;
 static double RotationY = 0.0;
 static double RotationZ = 0.0;
 
@@ -21,6 +21,10 @@ static double RotationZ = 0.0;
 
 static rabbit_mesh *Mesh;
 static double MeshCentroid[3];
+
+static int NumDrawModes = 2;
+static int DrawMode = 0;
+
 
 int main(int argc, char **argv)
 {
@@ -94,7 +98,7 @@ void GLUTDisplayFunc()
   /* actually draw stuff */
   glEnable(GL_DEPTH_TEST);
 
-  if (1) {
+  if (DrawMode == 00) {
     double C = (double) (1 << Mesh->config.max_depth);
     rabbit_edge *edge, *tmp_edge;
     rabbit_geom geom;
@@ -114,6 +118,54 @@ void GLUTDisplayFunc()
 
       glVertex3d(x0, y0, z0);
       glVertex3d(x1, y1, z1);
+    }
+    glEnd();
+  }
+  if (DrawMode == 1) {
+    double C = (double) (1 << Mesh->config.max_depth);
+    rabbit_geom geom;
+    rabbit_face *face, *tmp_face;
+    rabbit_node *node;
+    int h, node_rnp[3];
+
+    glBegin(GL_QUADS);
+
+    HASH_ITER(hh, Mesh->faces, face, tmp_face) {
+
+      if (face->rnp[2] != 0) continue;
+
+      geom = rabbit_mesh_geom(Mesh, face->rnp);
+
+      double x0 = geom.vertices[0 ] / C - MeshCentroid[0];
+      double y0 = geom.vertices[1 ] / C - MeshCentroid[1];
+      double z0 = geom.vertices[2 ] / C - MeshCentroid[2];
+      double x1 = geom.vertices[6 ] / C - MeshCentroid[0];
+      double y1 = geom.vertices[7 ] / C - MeshCentroid[1];
+      double z1 = geom.vertices[8 ] / C - MeshCentroid[2];
+      double x2 = geom.vertices[9 ] / C - MeshCentroid[0];
+      double y2 = geom.vertices[10] / C - MeshCentroid[1];
+      double z2 = geom.vertices[11] / C - MeshCentroid[2];
+      double x3 = geom.vertices[3 ] / C - MeshCentroid[0];
+      double y3 = geom.vertices[4 ] / C - MeshCentroid[1];
+      double z3 = geom.vertices[5 ] / C - MeshCentroid[2];
+
+      h = face->mesh->config.max_depth - geom.index[0] - 1;
+
+      node_rnp[0] = face->rnp[0];
+      node_rnp[1] = face->rnp[1];
+      node_rnp[2] = face->rnp[2] + 1 << h;
+
+      node = rabbit_mesh_containing(Mesh, node_rnp, RABBIT_RNP);
+
+      double r = node->data[0];
+      double g = node->data[0];
+      double b = node->data[0];
+
+      glColor3d(r, g, b);
+      glVertex3d(x0, y0, z0);
+      glVertex3d(x1, y1, z1);
+      glVertex3d(x2, y2, z2);
+      glVertex3d(x3, y3, z3);
     }
     glEnd();
   }
@@ -145,12 +197,13 @@ void GLUTKeyboardFunc(unsigned char key, int x, int y)
   case ESCAPE_KEY: exit(0);
   case '-': TranslateZ *= 1.1; break;
   case '=': TranslateZ /= 1.1; break;
+  case 'm': DrawMode = (DrawMode + 1) % NumDrawModes;
   }
 }
 
 void GLUTSpecialFunc(int key, int x, int y)
 {
-  double a = 4.0;
+  double a = 2.0;
   switch (key) {
   case GLUT_KEY_RIGHT: RotationY -= a; break;
   case GLUT_KEY_LEFT:  RotationY += a; break;
