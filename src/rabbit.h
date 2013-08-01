@@ -11,15 +11,14 @@
  * --------------------------------------------------------------- */
 #define RABBIT_SUCCESS  0
 #define RABBIT_FAIL     (1 << 0)
-#define RABBIT_ANY      (1 << 1)
-#define RABBIT_ACTIVE   (1 << 2)
-#define RABBIT_GHOST    (1 << 3)
-#define RABBIT_FORCE    (1 << 4)
-#define RABBIT_NODE     (1 << 5)
-#define RABBIT_FACE     (1 << 6)
-#define RABBIT_EDGE     (1 << 7)
-#define RABBIT_RNP      (1 << 8)
-#define RABBIT_INDEX    (1 << 9)
+#define RABBIT_ACTIVE   (1 << 1)
+#define RABBIT_GHOST    (1 << 2)
+#define RABBIT_FORCE    (1 << 3)
+#define RABBIT_NODE     (1 << 4)
+#define RABBIT_FACE     (1 << 5)
+#define RABBIT_EDGE     (1 << 6)
+#define RABBIT_RNP      (1 << 7)
+#define RABBIT_INDEX    (1 << 8)
 
 typedef struct rabbit_mesh rabbit_mesh;
 typedef struct rabbit_node rabbit_node;

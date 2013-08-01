@@ -20,7 +20,7 @@
 static uint64_t interleave_bits2(uint64_t a, uint64_t b);
 static uint64_t interleave_bits3(uint64_t a, uint64_t b, uint64_t c);
 static uint64_t preorder_label(int index[4], int max_depth, int r);
-//static int64_t  node_preorder_compare(rabbit_node *A, rabbit_node *B);
+static int64_t  node_preorder_compare(rabbit_node *A, rabbit_node *B);
 static int64_t  face_preorder_compare(rabbit_face *A, rabbit_face *B);
 static int64_t  edge_preorder_compare(rabbit_edge *A, rabbit_edge *B);
 static int      face_contains(rabbit_face *A, rabbit_face *B);
@@ -208,6 +208,54 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
   }
 }
 
+rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
+/*
+ * Return a pointer to nodes contained within the node at index or rational
+ * number position A, and the number of contained nodes in size. If the given
+ * address does not contain any nodes then the containing node is returned with
+ * a size of 1, unless there is also no containing node in which case NULL is
+ * returned with a size of 0.
+ *
+ */
+{
+  int h;
+  int rnp[3];
+
+  HASH_SRT(hh, M->nodes, node_preorder_compare);
+
+  if (flags & RABBIT_RNP) {
+    memcpy(rnp, A, 3 * sizeof(int));
+    h = FFS(A[0]);
+  }
+  else {
+    h = M->config.max_depth - A[0] - 1;
+
+    rnp[0] = (2 * A[1] + 1) << h;
+    rnp[1] = (2 * A[2] + 1) << h;
+    rnp[2] = (2 * A[3] + 1) << h;
+  }
+
+  rabbit_geom geom = rabbit_mesh_geom(M, rnp);
+  rabbit_node *head = rabbit_mesh_containing(M, rnp, RABBIT_RNP);
+  rabbit_node *node = head;
+  uint64_t head_label = preorder_label(geom.index, M->config.max_depth, 3);
+  uint64_t this_label = head_label;
+  uint64_t num_labels = tree_size_atlevel(3, h);
+
+  *size = 0;
+
+  if (head) {
+    while (this_label - head_label < num_labels) {
+      *size += 1;
+      geom = rabbit_mesh_geom(M, node->rnp);
+      this_label = preorder_label(geom.index, M->config.max_depth, 3);
+      node = node->hh.next;
+    }
+  }
+
+  return head;
+}
+
 rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
 {
   rabbit_geom geom;
@@ -332,7 +380,7 @@ int rabbit_mesh_count(rabbit_mesh *M, int flags)
   rabbit_node *node, *tmp;
   int count = 0;
 
-  if (flags & RABBIT_ANY) {
+  if (flags & RABBIT_NODE) {
     return HASH_COUNT(M->nodes);
   }
   else if (flags & RABBIT_FACE) {
