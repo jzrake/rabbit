@@ -1,6 +1,6 @@
 
 CFLAGS = -Wall -O3
-EXE = rabrun rabfile rabview hydro hydro-2d
+EXE = rabrun rabfile hydro hydro-2d
 
 GL_LIB = -framework OpenGL -framework GLUT
 GL_INC = -I/usr/X11R6/include

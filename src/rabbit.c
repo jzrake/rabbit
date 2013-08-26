@@ -293,6 +293,11 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
   H[1] = rnp[1] ? FFS(rnp[1]) - 1 : D;
   H[2] = rnp[2] ? FFS(rnp[2]) - 1 : D;
 
+  geom.index[0] = 0;
+  geom.index[1] = 0;
+  geom.index[2] = 0;
+  geom.index[3] = 0;
+
   /* if the height is the same along every axis then this is a node */
   if (H[0] == H[1] && H[1] == H[2]) {
     geom.type = RABBIT_NODE;
@@ -338,6 +343,11 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
   else if (H[0] == H[1]) {
     geom.axis = 2;
     geom.type = H[2] < H[0] ? RABBIT_EDGE : RABBIT_FACE;
+  }
+  else {
+    /* should never be reached, just to quiet uninitialized compiler warnings */
+    geom.axis = 0;
+    geom.type = RABBIT_FAIL;
   }
 
   if (geom.type == RABBIT_FACE) {
@@ -776,6 +786,7 @@ uint64_t preorder_label(int index[4], int max_depth, int r)
   case 1: morton = index[1]; break;
   case 2: morton = interleave_bits2(index[1], index[2]); break;
   case 3: morton = interleave_bits3(index[1], index[2], index[3]); break;
+  default: morton = 0; /* to quiet compiler warnings */
   }
 
   for (d=0; d<index[0]; ++d) {
@@ -997,7 +1008,7 @@ static void sanity_tests()
     I[0] = 0;
     rabbit_mesh_delnode(mesh, I, RABBIT_INDEX);
     node = rabbit_mesh_containing(mesh, R, RABBIT_RNP);
-    ASSERTEQI(node == NULL, 1);
+    ASSERTEQI((node == NULL), 1);
 
     rabbit_mesh_del(mesh);
   }
@@ -1173,7 +1184,7 @@ static void sanity_tests()
     rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
 
     node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
-    ASSERTEQI(node != NULL, 1);
+    ASSERTEQI((node != NULL), 1);
     ASSERTEQI(size, 1);
 
     rabbit_mesh_del(mesh);
