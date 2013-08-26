@@ -210,12 +210,9 @@ rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags)
 
 rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
 /*
- * Return a pointer to nodes contained within the node at index or rational
- * number position A, and the number of contained nodes in size. If the given
- * address does not contain any nodes then the containing node is returned with
- * a size of 1, unless there is also no containing node in which case NULL is
- * returned with a size of 0.
- *
+ * Return the subtree at index or rational number position A, and the number of
+ * nodes it contains. If there are no nodes at or below the target address, NULL
+ * is returned with size=0.
  */
 {
   int h;
@@ -225,7 +222,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
 
   if (flags & RABBIT_RNP) {
     memcpy(rnp, A, 3 * sizeof(int));
-    h = FFS(A[0]);
+    h = FFS(A[0]) - 1;
   }
   else {
     h = M->config.max_depth - A[0] - 1;
@@ -238,44 +235,46 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
   rabbit_geom targ_geom = rabbit_mesh_geom(M, rnp);
   rabbit_geom iter_geom;
   uint64_t targ_label = preorder_label(targ_geom.index, M->config.max_depth, 3);
+  uint64_t next_label = targ_label + tree_size_atlevel(3, h + 1);
   uint64_t iter_label;
 
   iter = M->nodes;
 
-  while (iter) {
+  MSG(2, "tree size at level %d is %d", h, tree_size_atlevel(3, h));
 
+  while (iter) {
     iter_geom = rabbit_mesh_geom(M, iter->rnp);
     iter_label = preorder_label(iter_geom.index, M->config.max_depth, 3);
-
-    if (targ_label <= iter_label) {
+    if (iter_label >= targ_label) {
       break;
     }
-
     iter = iter->hh.next;
   }
 
+  /* "head" node is the first one in the subtree */
   head = iter;
-
-  /* determine the label of the next node at the target level */
-  uint64_t next_label = targ_label +
-    tree_size_atlevel(3, FFS(iter->rnp[0]) - h - 1);
 
   *size = 0;
 
   while (iter) {
-
-    *size += 1;
-
     iter_geom = rabbit_mesh_geom(M, iter->rnp);
     iter_label = preorder_label(iter_geom.index, M->config.max_depth, 3);
 
-    if (iter_label > next_label) {
+    MSG(2, "index: (%d %d) PL: %"PRIu64" upper PL: %"PRIu64,
+	iter_geom.index[0], iter_geom.index[1], iter_label, next_label);
+
+    if (iter_label >= next_label) {
       break;
     }
 
+    *size += 1;
     iter = iter->hh.next;
   }
 
+  if (*size == 0) {
+    printf("setting to NULL, size=0\n");
+    head = NULL;
+  }
   return head;
 }
 
@@ -1163,6 +1162,15 @@ static void sanity_tests()
     rabbit_mesh_del(mesh);
   }
   if (1) {
+    /*
+     * This test uses the following tree:
+     * -----------------------------------------
+     *           x
+     *      x         x
+     *   x     o   o     x
+     *  o o             o o
+     * -----------------------------------------
+     */
     int D = 4;
     rabbit_cfg config = { D, 4, 4, 4 };
     rabbit_mesh *mesh = rabbit_mesh_new(config);
@@ -1183,10 +1191,60 @@ static void sanity_tests()
     index[0] = 3; index[1] = 7;
     rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
 
+
+    /* check all the nodes having subtree size 1 */
+
+    index[0] = 3; index[1] = 0;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 1);
+    index[0] = 3; index[1] = 1;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 1);
+    index[0] = 2; index[1] = 1;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 1);
+    index[0] = 2; index[1] = 2;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 1);
+    index[0] = 3; index[1] = 6;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 1);
+    index[0] = 3; index[1] = 7;
     node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
     ASSERTEQI((node != NULL), 1);
     ASSERTEQI(size, 1);
 
+    /* check nodes with subtree size 2 */
+    index[0] = 2; index[1] = 0;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 2);
+    index[0] = 2; index[1] = 3;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 2);
+
+    /* check nodes with subtree size 3 */
+    index[0] = 1; index[1] = 0;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 3);
+    index[0] = 1; index[1] = 1;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 3);
+    
+    /* check root node, with subtree size 6 */
+    index[0] = 0; index[1] = 0;
+    node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
+    ASSERTEQI((node != NULL), 1);
+    ASSERTEQI(size, 6);
+    
     rabbit_mesh_del(mesh);
   }
 }
