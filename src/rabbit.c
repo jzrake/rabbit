@@ -213,12 +213,13 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
  * Return the subtree at index or rational number position A, and the number of
  * nodes it contains. If there are no nodes at or below the target address, NULL
  * is returned with size=0.
+ * 
+ * IMPORTANT! This function assumes that nodes have already been sorted by their
+ * preorder label, the outcome is underfined otherwise.
  */
 {
   int h;
   int rnp[3];
-
-  HASH_SRT(hh, M->nodes, node_preorder_compare);
 
   if (flags & RABBIT_RNP) {
     memcpy(rnp, A, 3 * sizeof(int));
@@ -234,7 +235,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
   rabbit_node *iter, *head;
   rabbit_geom targ_geom = rabbit_mesh_geom(M, rnp);
   rabbit_geom iter_geom;
-  uint64_t targ_label = preorder_label(targ_geom.index, M->config.max_depth, 3);
+  uint64_t targ_label = targ_geom.preorder_label;
   uint64_t next_label = targ_label + tree_size_atlevel(3, h + 1);
   uint64_t iter_label;
 
@@ -244,7 +245,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
 
   while (iter) {
     iter_geom = rabbit_mesh_geom(M, iter->rnp);
-    iter_label = preorder_label(iter_geom.index, M->config.max_depth, 3);
+    iter_label = iter_geom.preorder_label;
     if (iter_label >= targ_label) {
       break;
     }
@@ -258,7 +259,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
 
   while (iter) {
     iter_geom = rabbit_mesh_geom(M, iter->rnp);
-    iter_label = preorder_label(iter_geom.index, M->config.max_depth, 3);
+    iter_label = iter_geom.preorder_label;
 
     MSG(2, "index: (%d %d) PL: %"PRIu64" upper PL: %"PRIu64,
 	iter_geom.index[0], iter_geom.index[1], iter_label, next_label);
@@ -380,6 +381,7 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
         }
       }
     }
+    geom.preorder_label = preorder_label(geom.index, M->config.max_depth, 3);
     break;
   case RABBIT_FACE:
     for (i=0; i<=1; ++i) {
@@ -392,6 +394,7 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
         geom.vertices[3*m + ax2] += (1 << H[ax2]) * (j==0 ? -1 : +1);
       }
     }
+    geom.preorder_label = preorder_label(geom.index, M->config.max_depth, 2);
     break;
   case RABBIT_EDGE:
     for (i=0; i<=1; ++i) {
@@ -401,6 +404,7 @@ rabbit_geom rabbit_mesh_geom(rabbit_mesh *M, int rnp[3])
       geom.vertices[3*m + 2] = rnp[2];
       geom.vertices[3*m + ax0] += (1 << H[ax0]) * (i==0 ? -1 : +1);
     }
+    geom.preorder_label = preorder_label(geom.index, M->config.max_depth, 1);
     break;
   }
 
@@ -473,6 +477,11 @@ int rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N)
     }
   }
   return RABBIT_SUCCESS;
+}
+
+void rabbit_mesh_sort(rabbit_mesh *M)
+{
+  HASH_SRT(hh, M->nodes, node_preorder_compare);
 }
 
 void rabbit_mesh_build(rabbit_mesh *M)
@@ -805,16 +814,12 @@ int64_t node_preorder_compare(rabbit_node *A, rabbit_node *B)
 {
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
-  return (preorder_label(A_geom.index, A->mesh->config.max_depth, 3) -
-          preorder_label(B_geom.index, B->mesh->config.max_depth, 3));
+  return A_geom.preorder_label - B_geom.preorder_label;
 }
 
 int64_t face_preorder_compare(rabbit_face *A, rabbit_face *B)
 {
-  uint64_t A_label;
-  uint64_t B_label;
   int ax0, ax1, ax2;
-
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
@@ -832,19 +837,13 @@ int64_t face_preorder_compare(rabbit_face *A, rabbit_face *B)
     return A->rnp[ax0] - B->rnp[ax0];
   }
 
-  /* 2d preorder label in the plane of both faces */
-  A_label = preorder_label(A_geom.index, A->mesh->config.max_depth, 2);
-  B_label = preorder_label(B_geom.index, B->mesh->config.max_depth, 2);
-
-  return A_label - B_label;
+  /* sort by 2d preorder label in the plane of both faces */
+  return A_geom.preorder_label - B_geom.preorder_label;
 }
 
 int64_t edge_preorder_compare(rabbit_edge *A, rabbit_edge *B)
 {
-  uint64_t A_label;
-  uint64_t B_label;
   int ax0, ax1, ax2;
-
   rabbit_geom A_geom = rabbit_mesh_geom(A->mesh, A->rnp);
   rabbit_geom B_geom = rabbit_mesh_geom(B->mesh, B->rnp);
 
@@ -867,11 +866,8 @@ int64_t edge_preorder_compare(rabbit_edge *A, rabbit_edge *B)
     return A->rnp[ax2] - B->rnp[ax2];
   }
 
-  /* 1d preorder label on the axis of both edges */
-  A_label = preorder_label(A_geom.index, A->mesh->config.max_depth, 1);
-  B_label = preorder_label(B_geom.index, B->mesh->config.max_depth, 1);
-
-  return A_label - B_label;
+  /* sort by 1d preorder label on the axis of both edges */
+  return A_geom.preorder_label - B_geom.preorder_label;
 }
 
 int face_contains(rabbit_face *A, rabbit_face *B)
@@ -1178,6 +1174,9 @@ static void sanity_tests()
     int index[4] = { 0, 0, 0, 0 };
     int size;
 
+    /* build the mesh out of order to ensure that sorting works */
+    index[0] = 3; index[1] = 7;
+    rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     index[0] = 3; index[1] = 0;
     rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     index[0] = 3; index[1] = 1;
@@ -1188,12 +1187,11 @@ static void sanity_tests()
     rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     index[0] = 3; index[1] = 6;
     rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
-    index[0] = 3; index[1] = 7;
-    rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
 
+    /* sort nodes by preorder label (necessary for contains function) */
+    rabbit_mesh_sort(mesh);
 
     /* check all the nodes having subtree size 1 */
-
     index[0] = 3; index[1] = 0;
     node = rabbit_mesh_contains(mesh, index, RABBIT_INDEX, &size);
     ASSERTEQI((node != NULL), 1);

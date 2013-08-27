@@ -46,10 +46,12 @@ rabbit_node *rabbit_mesh_putnode(rabbit_mesh *M, int *A, int flags);
 rabbit_node *rabbit_mesh_getnode(rabbit_mesh *M, int *A, int flags);
 rabbit_node *rabbit_mesh_delnode(rabbit_mesh *M, int *A, int flags);
 rabbit_node *rabbit_mesh_containing(rabbit_mesh *M, int *A, int flags);
+rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size);
 rabbit_geom  rabbit_mesh_geom(rabbit_mesh *M, int rnp[3]);
 int          rabbit_mesh_count(rabbit_mesh *M, int flags);
 int          rabbit_mesh_merge(rabbit_mesh *M, rabbit_mesh *N);
 void         rabbit_mesh_build(rabbit_mesh *M);
+void         rabbit_mesh_sort(rabbit_mesh *M);
 void         rabbit_mesh_dump(rabbit_mesh *M, char *fname);
 rabbit_mesh *rabbit_mesh_load(char *fname);
 
