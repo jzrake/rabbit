@@ -31,6 +31,8 @@ static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
  * tree_size_atlevel = (m^(n+1) - 1) / (m - 1)
  */
 #define tree_size_atlevel(r, n) ((1LL << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
+
+/* Maximum value for a rational number position */
 #define max_rnp(M) (1 << (M)->config.max_depth)
 
 
@@ -283,7 +285,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
   }
 
   if (*size == 0) {
-    printf("setting to NULL, size=0\n");
+    //    printf("setting to NULL, size=0\n");
     head = NULL;
   }
   return head;
