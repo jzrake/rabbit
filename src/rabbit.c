@@ -31,6 +31,8 @@ static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
  * tree_size_atlevel = (m^(n+1) - 1) / (m - 1)
  */
 #define tree_size_atlevel(r, n) ((1LL << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
+#define max_rnp(M) (1 << (M)->config.max_depth)
+
 
 #ifdef RABBIT_USE_SYSTEM_FFS
 #define FFS(i) ffs(i)
@@ -215,7 +217,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
  * is returned with size=0.
  * 
  * IMPORTANT! This function assumes that nodes have already been sorted by their
- * preorder label, the outcome is underfined otherwise.
+ * preorder label, otherwise the outcome is undefined.
  */
 {
   int h;
@@ -230,6 +232,14 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
     rnp[0] = (2 * A[1] + 1) << h;
     rnp[1] = (2 * A[2] + 1) << h;
     rnp[2] = (2 * A[3] + 1) << h;
+  }
+
+  if (rnp[0] < 0 || rnp[0] >= max_rnp(M) ||
+      rnp[1] < 0 || rnp[1] >= max_rnp(M) ||
+      rnp[2] < 0 || rnp[2] >= max_rnp(M)) {
+    /* can't handle off-bounds query */
+    *size = 0;
+    return NULL;
   }
 
   rabbit_node *iter, *head;
