@@ -9,9 +9,25 @@
  * -----------------------------------------------------------------------------
  */
 
+
+#include <math.h>
 #define RABBIT_INTERNAL
 #include "rabbit.h"
 #include "euler1d.h"
+
+
+/* Maximum value for a rational number position */
+#define max_rnp(M) (1 << (M)->config.max_depth)
+
+static const double PlmTheta = 2.0;
+static double minval3(double a, double b, double c)
+{
+  return (a<b) ? ((a<c) ? a : c) : ((b<c) ? b : c);
+}
+static double sign(double x)
+{
+  return (x > 0.0) - (x < 0.0);
+}
 
 
 void face_get_nodes(rabbit_face *face, rabbit_node **nL, rabbit_node **nR,
@@ -93,43 +109,106 @@ void build_ghost(rabbit_mesh *mesh)
   rabbit_mesh_build(mesh);
 }
 
+void evalgrad(rabbit_mesh *mesh)
+{
+  rabbit_node *node, *tmp_node;
+  rabbit_node *nodeL;
+  rabbit_node *nodeR;
+  rabbit_geom geomL;
+  rabbit_geom geomR;
+  int q;
+
+  rabbit_mesh_sort(mesh);
+
+  HASH_ITER(hh, mesh->nodes, node, tmp_node) {
+
+    geomL = geomR = rabbit_mesh_geom(mesh, node->rnp);
+    geomL.index[1] -= 1;
+    geomR.index[1] += 1;
+
+    nodeL = rabbit_mesh_containing(mesh, geomL.index, RABBIT_INDEX);
+    nodeR = rabbit_mesh_containing(mesh, geomR.index, RABBIT_INDEX);
+
+    if (nodeL == NULL) {
+      int size;
+      nodeL = rabbit_mesh_contains(mesh, geomL.index, RABBIT_INDEX, &size);
+      if (nodeL) {
+	nodeL = nodeL->hh.next; // need the right node in the subtree
+      }
+    }
+    if (nodeR == NULL) {
+      int size;
+      nodeR = rabbit_mesh_contains(mesh, geomR.index, RABBIT_INDEX, &size);
+    }
+
+    if (!(nodeL && nodeR)) {
+      for (q=0; q<5; ++q) {
+	node->data[15 + q] = 0.0;
+      }
+      node->flags |= RABBIT_GHOST;
+    }
+    else {
+      double xL = (double) nodeL->rnp[0] / max_rnp(mesh);
+      double x0 = (double) node ->rnp[0] / max_rnp(mesh);
+      double xR = (double) nodeR->rnp[0] / max_rnp(mesh);
+
+      for (q=0; q<5; ++q) {
+	double yL = (double) nodeL->data[q];
+	double y0 = (double) node ->data[q];
+	double yR = (double) nodeR->data[q];
+	
+	double a = (yL - y0) / (xL - x0) * PlmTheta;
+	double b = (yL - yR) / (xL - xR);
+	double c = (y0 - yR) / (x0 - xR) * PlmTheta;
+	
+	double sa = sign(a), sb = sign(b), sc = sign(c);
+	double fa = fabs(a), fb = fabs(b), fc = fabs(c);
+	double g = 0.25 * fabs(sa + sb) * (sa + sc) * minval3(fa, fb, fc);
+	
+	node->data[15 + q] = g;
+      }
+    }
+  }
+}
+
 void onestep(rabbit_mesh *mesh, double dt)
 {
-  Primitive P[4];
   Primitive Pl, Pr;
   rabbit_face *face, *tmp_face;
   rabbit_geom geomF, geomL, geomR;
-  rabbit_node *nodes[4];
-  int n, q;
+  rabbit_node *nodeL, *nodeR;
+  int q;
 
   HASH_ITER(hh, mesh->faces, face, tmp_face) {
+
     geomF = rabbit_mesh_geom(mesh, face->rnp);
+
     if (geomF.axis == 0) {
-      face_get_nodes2(face, nodes+0, 2);
-      if (nodes[1] && nodes[2]) {
-	if (nodes[0] == NULL) {
-	  nodes[0] = nodes[1];
-	}
-	if (nodes[3] == NULL) {
-	  nodes[3] = nodes[2];
-	}
-	for (n=0; n<4; ++n) {
-	  P[n] = *((const Primitive*) nodes[n]->data);
-	}
-        ReconstructStates(&P[1], &Pl, &Pr);
-	geomL = rabbit_mesh_geom(mesh, nodes[1]->rnp);
-	geomR = rabbit_mesh_geom(mesh, nodes[2]->rnp);
-	Conserved F = RiemannSolver(&Pl, &Pr, 0);
-	double dA = 1.0;
-	double dVL = 1.0 / (1 << geomL.index[0]);
-	double dVR = 1.0 / (1 << geomR.index[0]);
-	for (q=0; q<5; ++q) {
-	  nodes[1]->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
-	  nodes[2]->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
-	}
+
+      face_get_nodes(face, &nodeL, &nodeR, 0);
+
+      if (nodeL == NULL || nodeR == NULL) {
+	//	printf("on boundary\n");
+	continue;
       }
-      else {
-	//	printf("they're not all there at %d\n", face->rnp[0]);
+
+      geomL = rabbit_mesh_geom(mesh, nodeL->rnp);
+      geomR = rabbit_mesh_geom(mesh, nodeR->rnp);
+
+      for (int q=0; q<5; ++q) {
+	((double*) &Pl)[q] = nodeL->data[q];
+	((double*) &Pr)[q] = nodeR->data[q];
+      }
+
+      Conserved F = RiemannSolver(&Pl, &Pr, 0);
+
+      double dA = 1.0;
+      double dVL = 1.0 / (1 << geomL.index[0]);
+      double dVR = 1.0 / (1 << geomR.index[0]);
+
+      for (q=0; q<5; ++q) {
+	nodeL->data[10 + q] -= ((double*)&F)[q] * dt * dA / dVL;
+	nodeR->data[10 + q] += ((double*)&F)[q] * dt * dA / dVR;
       }
     }
   }
@@ -158,6 +237,9 @@ void advance(rabbit_mesh *mesh, double dt)
   rabbit_node *node, *tmp_node;
 
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
+
+    if (node->flags & RABBIT_GHOST) continue;
+
     const Primitive *P = (const Primitive*) &node->data[0];
     const Conserved U = PrimToCons(P);
     memcpy(&node->data[ 5], &U, 5 * sizeof(double));
@@ -173,6 +255,9 @@ void advanceRK3(rabbit_mesh *mesh, double dt)
   rabbit_node *node, *tmp_node;
 
   HASH_ITER(hh, mesh->nodes, node, tmp_node) {
+
+    if (node->flags & RABBIT_GHOST) continue;
+
     const Primitive *P = (const Primitive*) &node->data[0];
     const Conserved U = PrimToCons(P);
     memcpy(&node->data[ 5], &U, 5 * sizeof(double));
@@ -191,32 +276,33 @@ void advanceRK3(rabbit_mesh *mesh, double dt)
 
 int main(int argc, char **argv)
 {
-  rabbit_cfg config = { 16, 15, 0, 0 };
+  rabbit_cfg config = { 11, 20, 0, 0 };
   rabbit_mesh *mesh = rabbit_mesh_new(config);
   rabbit_node *node;
   int d = 9;
   int i;
   int index[4] = { d, 0, 0, 0 };
 
-  if (1) {
+  if (0) {
     for (i=8; i<(1<<d)-8; ++i) {
       index[1] = i;
       rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     }
   }
-  else if (0) {
-    for (i=0; i<3*(1<<d)/8; ++i) {
+  else if (1) {
+    for (i=0; i<2*(1<<d)/8; ++i) {
       index[0] = d - 1;
       index[1] = i;
       rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     }
-    for (i=3*(1<<d)/4; i<(1<<d); ++i) {
+    for (i=2*(1<<d)/4; i<(1<<d); ++i) {
       index[0] = d;
       index[1] = i;
       rabbit_mesh_putnode(mesh, index, RABBIT_ACTIVE);
     }
   }
   rabbit_mesh_build(mesh);
+  evalgrad(mesh);
 
   for (node=mesh->nodes; node != NULL; node=node->hh.next) {
     double x = ((double) node->rnp[0]) / (1 << mesh->config.max_depth);
@@ -236,20 +322,14 @@ int main(int argc, char **argv)
     }
   }
 
-  build_ghost(mesh);
-  build_ghost(mesh);
-  printf("there are %d ghost zones\n", rabbit_mesh_count(mesh, RABBIT_GHOST));
-
-
   double t = 0.0;
   double dt = 0.00075;
 
-  while (t < 0.16) {
+  while (t < 0.12) {
     advanceRK3(mesh, dt);
     t += dt;
     printf("t=%4.3f\n", t);
   }
-
 
   rabbit_mesh_dump(mesh, "rabbit-1d.mesh");
   rabbit_mesh_del(mesh);
