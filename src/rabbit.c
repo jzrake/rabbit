@@ -30,7 +30,7 @@ static int      edge_contains(rabbit_edge *A, rabbit_edge *B);
  * Return the size of a tree of max depth depth n and branching ratio m=2^r
  * tree_size_atlevel = (m^(n+1) - 1) / (m - 1)
  */
-#define tree_size_atlevel(r, n) ((1 << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
+#define tree_size_atlevel(r, n) ((1LL << ((r)*((n)+1))) - 1) / ((1 << (r)) - 1)
 
 #ifdef RABBIT_USE_SYSTEM_FFS
 #define FFS(i) ffs(i)
@@ -241,7 +241,7 @@ rabbit_node *rabbit_mesh_contains(rabbit_mesh *M, int *A, int flags, int *size)
 
   iter = M->nodes;
 
-  MSG(2, "tree size at level %d is %d", h, tree_size_atlevel(3, h));
+  MSG(2, "tree size at level %d is %"PRIu64, h, tree_size_atlevel(3, h));
 
   while (iter) {
     iter_geom = rabbit_mesh_geom(M, iter->rnp);
@@ -941,19 +941,20 @@ int edge_contains(rabbit_edge *A, rabbit_edge *B)
 static void sanity_tests()
 {
   /* 1d trees, m=2 */
-  ASSERTEQI(tree_size_atlevel(1, 0), 1);
-  ASSERTEQI(tree_size_atlevel(1, 1), 3);
-  ASSERTEQI(tree_size_atlevel(1, 2), 7);
+  ASSERTEQL(tree_size_atlevel(1, 0), 1);
+  ASSERTEQL(tree_size_atlevel(1, 1), 3);
+  ASSERTEQL(tree_size_atlevel(1, 2), 7);
 
   /* 2d trees, m=4 */
-  ASSERTEQI(tree_size_atlevel(2, 0), 1);
-  ASSERTEQI(tree_size_atlevel(2, 1), 5);
-  ASSERTEQI(tree_size_atlevel(2, 2), 21);
+  ASSERTEQL(tree_size_atlevel(2, 0), 1);
+  ASSERTEQL(tree_size_atlevel(2, 1), 5);
+  ASSERTEQL(tree_size_atlevel(2, 2), 21);
 
   /* 3d trees, m=8 */
-  ASSERTEQI(tree_size_atlevel(3, 0), 1);
-  ASSERTEQI(tree_size_atlevel(3, 1), 9);
-  ASSERTEQI(tree_size_atlevel(3, 2), 73);
+  ASSERTEQL(tree_size_atlevel(3, 0), 1);
+  ASSERTEQL(tree_size_atlevel(3, 1), 9);
+  ASSERTEQL(tree_size_atlevel(3, 2), 73);
+  ASSERTEQL(tree_size_atlevel(3, 11), 9817068105);
 
   /* does a cube have 12 edges and 6 faces? */
   if (1) {
