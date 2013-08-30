@@ -66,34 +66,6 @@ void face_get_nodes(rabbit_face *face, rabbit_node **nL, rabbit_node **nR,
   }
 }
 
-int face_get_nodes2(rabbit_face *face, rabbit_node **nodes, int num)
-{
-  int rnp[3];
-  int h;
-  int n;
-  int all_there = 1;
-  rabbit_geom geom;
-
-  geom = rabbit_mesh_geom(face->mesh, face->rnp);
-  h = face->mesh->config.max_depth - geom.index[0] - 1;
-
-  for (n=0; n<num; ++n) {
-
-    memcpy(rnp, face->rnp, 3 * sizeof(int));
-    rnp[geom.axis] -= (2*n + 1) * (1 << h);
-    nodes[num - n - 1] = rabbit_mesh_containing(face->mesh, rnp, RABBIT_RNP);
-    all_there *= (nodes[num - n - 1] != NULL);
-
-    memcpy(rnp, face->rnp, 3 * sizeof(int));
-    rnp[geom.axis] += (2*n + 1) * (1 << h);
-    nodes[num + n + 0] = rabbit_mesh_containing(face->mesh, rnp, RABBIT_RNP);
-    all_there *= (nodes[num + n + 0] != NULL);
-
-  }
-
-  return all_there;
-}
-
 void build_ghost(rabbit_mesh *mesh)
 {
   rabbit_face *face;
@@ -177,6 +149,8 @@ void onestep(rabbit_mesh *mesh, double dt)
   rabbit_face *face, *tmp_face;
   rabbit_geom geomF, geomL, geomR;
   rabbit_node *nodeL, *nodeR;
+  double gL, gR;
+  double dL, dR;
   int q;
 
   HASH_ITER(hh, mesh->faces, face, tmp_face) {
@@ -195,9 +169,15 @@ void onestep(rabbit_mesh *mesh, double dt)
       geomL = rabbit_mesh_geom(mesh, nodeL->rnp);
       geomR = rabbit_mesh_geom(mesh, nodeR->rnp);
 
-      for (int q=0; q<5; ++q) {
-	((double*) &Pl)[q] = nodeL->data[q];
-	((double*) &Pr)[q] = nodeR->data[q];
+      for (q=0; q<5; ++q) {
+
+	dL = (double) (face->rnp[0] - nodeL->rnp[0]) / max_rnp(mesh);
+	dR = (double) (face->rnp[0] - nodeR->rnp[0]) / max_rnp(mesh);
+	gL = nodeL->data[15 + q];
+	gR = nodeR->data[15 + q];
+
+	((double*) &Pl)[q] = nodeL->data[q] + dL * gL;
+	((double*) &Pr)[q] = nodeR->data[q] + dR * gR;
       }
 
       Conserved F = RiemannSolver(&Pl, &Pr, 0);
@@ -232,7 +212,7 @@ void average(rabbit_mesh *mesh, double a, double b)
   }
 }
 
-void advance(rabbit_mesh *mesh, double dt)
+void prepare_timestep(rabbit_mesh *mesh)
 {
   rabbit_node *node, *tmp_node;
 
@@ -242,34 +222,34 @@ void advance(rabbit_mesh *mesh, double dt)
 
     const Primitive *P = (const Primitive*) &node->data[0];
     const Conserved U = PrimToCons(P);
+
     memcpy(&node->data[ 5], &U, 5 * sizeof(double));
     memcpy(&node->data[10], &U, 5 * sizeof(double));
   }
+}
+
+void advance(rabbit_mesh *mesh, double dt)
+{
+  prepare_timestep(mesh);
 
   onestep(mesh, dt);
   average(mesh, 0.0, 1.0);
+  evalgrad(mesh);
 }
 
 void advanceRK3(rabbit_mesh *mesh, double dt)
 {
-  rabbit_node *node, *tmp_node;
+  prepare_timestep(mesh);
 
-  HASH_ITER(hh, mesh->nodes, node, tmp_node) {
-
-    if (node->flags & RABBIT_GHOST) continue;
-
-    const Primitive *P = (const Primitive*) &node->data[0];
-    const Conserved U = PrimToCons(P);
-    memcpy(&node->data[ 5], &U, 5 * sizeof(double));
-    memcpy(&node->data[10], &U, 5 * sizeof(double));
-  }
-
+  evalgrad(mesh);
   onestep(mesh, dt);
   average(mesh, 0./1, 1./1);
 
+  evalgrad(mesh);
   onestep(mesh, dt);
   average(mesh, 3./4, 1./4);
 
+  evalgrad(mesh);
   onestep(mesh, dt);
   average(mesh, 1./3, 2./3);
 }
@@ -302,10 +282,9 @@ int main(int argc, char **argv)
     }
   }
   rabbit_mesh_build(mesh);
-  evalgrad(mesh);
 
   for (node=mesh->nodes; node != NULL; node=node->hh.next) {
-    double x = ((double) node->rnp[0]) / (1 << mesh->config.max_depth);
+    double x = ((double) node->rnp[0]) / max_rnp(mesh);
     if (x < 0.5) {
       node->data[0] = 1.0;
       node->data[1] = 1.0;
@@ -325,7 +304,7 @@ int main(int argc, char **argv)
   double t = 0.0;
   double dt = 0.00075;
 
-  while (t < 0.12) {
+  while (t < 0.20) {
     advanceRK3(mesh, dt);
     t += dt;
     printf("t=%4.3f\n", t);
